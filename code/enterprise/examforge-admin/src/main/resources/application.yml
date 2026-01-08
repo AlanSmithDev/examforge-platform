@@ -1,0 +1,16 @@
+server:
+  port: 8104
+
+spring:
+  application:
+    name: examforge-admin
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/examforge_admin?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:examforge}
+    password: ${MYSQL_PASSWORD:examforge123}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false

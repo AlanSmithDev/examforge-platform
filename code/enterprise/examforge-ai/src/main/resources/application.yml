@@ -1,0 +1,27 @@
+server:
+  port: 8107
+
+spring:
+  application:
+    name: examforge-ai
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/examforge_ai?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:examforge}
+    password: ${MYSQL_PASSWORD:examforge123}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+
+examforge:
+  ai:
+    provider: ${AI_PROVIDER:MOCK}            # MOCK / OPENAI_COMPAT（DeepSeek/Qwen/vLLM 均兼容）
+    base-url: ${AI_BASE_URL:https://api.deepseek.com}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:deepseek-chat}
+    timeout-seconds: 15
+    quota-free-per-day: 20                   # AI-4 配额：免费用户
+    quota-member-per-day: 200                # 会员
+  trade-url: ${TRADE_URL:http://localhost:8105}

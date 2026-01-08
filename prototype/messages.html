@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>消息中心 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .msg { background:#fff; border-radius:12px; padding:13px 18px; box-shadow:var(--shadow); margin-bottom:8px; display:flex; gap:12px; align-items:center; }
+  .msg.unread { border-left:4px solid var(--primary); }
+  .msg .t { font-size:14px; font-weight:600; }
+  .msg .c { font-size:12.5px; color:var(--text-3); margin-top:2px; }
+  .msg .time { margin-left:auto; font-size:11.5px; color:var(--text-3); white-space:nowrap; }
+  .msg .type { font-size:11px; border-radius:999px; padding:1px 9px; font-weight:700; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a><a href="xuanti.html">章节选题</a><a href="zhineng.html">智能组卷</a>
+    <a href="mine.html">个人题库</a><a href="vip.html">会员</a><a class="active" href="messages.html">🔔 消息</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="vip.html" id="userBox">登录 / 注册</a>
+  <a class="btn btn-primary" href="zhineng.html">去组卷</a>
+</nav>
+
+<section class="section" style="padding-top:14px;max-width:760px">
+  <div class="section-head" style="margin-bottom:0">
+    <h2>消息中心 <span class="muted" style="font-size:13px;font-weight:400">未读 <b id="unreadN" style="color:var(--primary)">0</b> 条</span></h2>
+    <p>审核结果 / 积分奖励 / 订单事件 —— 全部动作实时触达</p>
+  </div>
+
+  <div id="gate" class="card" style="padding:26px;text-align:center;display:none">
+    <h3 style="margin-top:0">请先登录</h3><a class="btn btn-primary" href="vip.html">去登录 / 注册</a>
+  </div>
+
+  <div id="main">
+    <div style="display:flex;justify-content:flex-end;margin:12px 0">
+      <button class="btn btn-ghost btn-sm" onclick="readAll()">全部标记已读</button>
+    </div>
+    <div id="msgList"><p class="muted">加载中…</p></div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:20px"><p><b>智卷云</b> · 消息中心（接口：GET /messages、POST /messages/{id}/read，docs/17 §7E）</p></footer>
+
+<script>
+const API = location.protocol.startsWith('http') ? '/api/v1' : 'http://localhost:3000/api/v1';
+const TOKEN = localStorage.getItem('zj_token') || '';
+const AUTH = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+const TYPE_STYLE = { SYSTEM: ['系统', '#f1f5f9|#475569'], ORDER: ['订单', '#e0f2fe|#0369a1'], REVIEW: ['审核', '#fef3c7|#92400e'], REWARD: ['奖励', '#dcfce7|#166534'] };
+
+function toast(m){const t=document.getElementById('toast');t.textContent=(m.startsWith('⚠')?'':'✅ ')+m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', ...AUTH, ...(opts.headers || {}) }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({ code: 50010, message: '响应异常' }));
+  if (j.code !== 0) { const e = new Error(j.message); e.code = j.code; e.data = j.data; throw e; }
+  return j.data;
+}
+
+async function loadList() {
+  const box = document.getElementById('msgList');
+  box.innerHTML = '<p class="muted">加载中…</p>';
+  try {
+    const d = await api('/messages?pageNo=1&pageSize=30');
+    document.getElementById('unreadN').textContent = d.unread;
+    box.innerHTML = d.rows.map(m => {
+      const [label, colors] = TYPE_STYLE[m.type] || ['消息', '#f1f5f9|#475569'];
+      const [bg, fg] = colors.split('|');
+      return `<div class="msg ${m.read ? '' : 'unread'}">
+        <span class="type" style="background:${bg};color:${fg}">${label}</span>
+        <div style="flex:1"><div class="t">${m.title}</div><div class="c">${m.content || ''}</div></div>
+        <span class="time">${m.created_at}</span>
+        ${m.read ? '' : `<button class="btn btn-ghost btn-sm" onclick="readOne(${m.id})">已读</button>`}
+      </div>`;
+    }).join('') || '<p class="muted">暂无消息</p>';
+  } catch (e) { box.innerHTML = '<p class="muted">加载失败：' + e.message + '</p>'; }
+}
+async function readOne(id) { try { await api('/messages/' + id + '/read', { method: 'POST' }); loadList(); } catch (_) {} }
+async function readAll() { try { await api('/messages/read-all', { method: 'POST' }); toast('已全部标记已读'); loadList(); } catch (_) {} }
+
+(async function boot() {
+  if (!TOKEN) { document.getElementById('gate').style.display = ''; document.getElementById('main').style.display = 'none'; return; }
+  loadList();
+})();
+</script>
+</body>
+</html>

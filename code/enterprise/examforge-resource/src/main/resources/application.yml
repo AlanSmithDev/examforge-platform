@@ -1,0 +1,26 @@
+server:
+  port: 8108
+
+spring:
+  application:
+    name: examforge-resource
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/examforge_resource?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:examforge}
+    password: ${MYSQL_PASSWORD:examforge123}
+  cloud:
+    openfeign:
+      client:
+        config:
+          examforge-trade:
+            url: ${TRADE_URL:http://localhost:8105}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+
+examforge:
+  resource:
+    share-pct: 50   # 创作者分成比例%（docs/26 §6，运营可配）
