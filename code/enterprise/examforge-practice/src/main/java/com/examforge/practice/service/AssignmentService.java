@@ -8,6 +8,7 @@ import com.examforge.common.web.Result;
 import com.examforge.practice.domain.Assignment;
 import com.examforge.practice.domain.AssignmentAnswer;
 import com.examforge.practice.domain.AssignmentStudent;
+import com.examforge.practice.domain.WrongQuestion;
 import com.examforge.practice.logic.AnswerGrader;
 import com.examforge.practice.logic.AssignmentRules;
 import com.examforge.practice.mapper.AssignmentAnswerMapper;
@@ -35,6 +36,7 @@ public class AssignmentService {
     private final AssignmentAnswerMapper answerMapper;
     private final QuestionClient questionClient;
     private final com.examforge.api.feign.AnswerSheetClient answerSheetClient;
+    private final WrongBookSync wrongBookSync;
 
     // ---------- 教师侧 ----------
 
@@ -197,6 +199,7 @@ public class AssignmentService {
             } catch (DuplicateKeyException e) {
                 throw new BizException(Result.BAD_REQUEST, "请勿重复提交");
             }
+            wrongBookSync.sync(studentId, qid, q.getKpNames(), null, aa.getCorrect());   // 考后诊断：答错入本/答对解决（docs/26 F-XKW-12）
             userAnswers.put(qid, user);
             detail.add(Map.of("questionId", qid, "correct", right == null ? "PENDING" : right));
         }
@@ -229,6 +232,12 @@ public class AssignmentService {
         }
         List<AssignmentAnswer> answers = answerMapper.selectList(new LambdaQueryWrapper<AssignmentAnswer>()
                 .eq(AssignmentAnswer::getAssignmentId, assignmentId).eq(AssignmentAnswer::getStudentId, studentId));
+        // 错题本联动需要知识点：批量取本次批改题目的 kpNames（低频教师操作，可接受一次 Feign）
+        List<Long> itemQids = items.stream()
+                .map(i -> Long.valueOf(String.valueOf(i.get("questionId")))).distinct().toList();
+        Map<Long, QuestionSummaryDTO> kpOf = itemQids.isEmpty() ? Map.of()
+                : questionClient.listByIds(itemQids).stream()
+                        .collect(Collectors.toMap(QuestionSummaryDTO::getId, q -> q));
         Set<Long> graded = new HashSet<>();
         for (Map<String, Object> item : items) {
             Long qid = Long.valueOf(String.valueOf(item.get("questionId")));
@@ -237,9 +246,12 @@ public class AssignmentService {
             boolean right = "1".equals(String.valueOf(c)) || "true".equalsIgnoreCase(String.valueOf(c));
             for (AssignmentAnswer ans : answers) {
                 if (ans.getQuestionId().equals(qid)) {
+                    Integer prev = ans.getCorrect();
                     ans.setCorrect(right ? 1 : 0);
                     if (item.get("score") != null) ans.setScore(BigDecimal.valueOf(Double.parseDouble(String.valueOf(item.get("score")))));
                     answerMapper.updateById(ans);
+                    QuestionSummaryDTO qd = kpOf.get(qid);
+                    wrongBookSync.sync(studentId, qid, qd == null ? null : qd.getKpNames(), prev, ans.getCorrect());
                     graded.add(qid);
                 }
             }
@@ -303,6 +315,9 @@ public class AssignmentService {
         return Map.of("assignmentId", assignmentId, "title", a.getTitle(),
                 "roster", roster.size(), "submitted", submitted, "graded", graded,
                 "avgScorePct", Math.round(avgScore * 100) / 100.0,
+                "rosterRows", roster.stream().map(r -> Map.<String, Object>of(
+                        "studentId", r.getStudentId(), "status", r.getStatus(),
+                        "score", r.getScore() == null ? -1 : r.getScore())).toList(),
                 "questionStats", questionStats, "weakKnowledgePoints", weakKp);
     }
 
@@ -313,6 +328,82 @@ public class AssignmentService {
                 "title", a.getTitle(),
                 "refId", String.valueOf(assignmentId),
                 "questionIds", parseQuestionIds(a.getQuestionIds())));
+    }
+
+    /**
+     * 学生个体学情报告（e 卷通闭环最后一环：考后诊断，docs/26 F-XKW-12）。
+     * 聚合跨作业作答：整体正确率 + 薄弱知识点（AssignmentRules.kpAggregate 行级口径）+
+     * 最近作业成绩趋势 + 错题本未解决 TOP（含作业域联动入本的错题）。
+     * 鉴权：学生仅查本人；教师须为该生所在任一作业的布置者。
+     */
+    public Map<String, Object> studentReport(Long viewerId, Long studentId) {
+        List<AssignmentStudent> roster = studentMapper.selectList(new LambdaQueryWrapper<AssignmentStudent>()
+                .eq(AssignmentStudent::getStudentId, studentId));
+        List<Long> rosterIds = roster.stream().map(AssignmentStudent::getAssignmentId).toList();
+        if (!viewerId.equals(studentId)) {
+            long asTeacher = rosterIds.isEmpty() ? 0
+                    : assignmentMapper.selectCount(new LambdaQueryWrapper<Assignment>()
+                            .in(Assignment::getId, rosterIds).eq(Assignment::getTeacherId, viewerId));
+            if (asTeacher == 0) throw new BizException(Result.FORBIDDEN, "无权查看该学生报告");
+        }
+        Map<Long, Assignment> assignments = rosterIds.isEmpty() ? Map.of()
+                : assignmentMapper.selectBatchIds(rosterIds).stream()
+                        .filter(a -> a.getStatus() != AssignmentRules.DRAFT)
+                        .collect(Collectors.toMap(Assignment::getId, a -> a));
+        List<AssignmentStudent> visible = roster.stream()
+                .filter(r -> assignments.containsKey(r.getAssignmentId()))
+                .sorted(Comparator.comparingLong(AssignmentStudent::getAssignmentId).reversed())
+                .toList();
+
+        List<AssignmentAnswer> answers = visible.isEmpty() ? List.of()
+                : answerMapper.selectList(new LambdaQueryWrapper<AssignmentAnswer>()
+                        .in(AssignmentAnswer::getAssignmentId, visible.stream().map(AssignmentStudent::getAssignmentId).toList())
+                        .eq(AssignmentAnswer::getStudentId, studentId));
+        long answered = answers.size();
+        long correct = answers.stream().filter(a -> a.getCorrect() != null && a.getCorrect() == 1).count();
+        long wrong = answers.stream().filter(a -> a.getCorrect() != null && a.getCorrect() == 0).count();
+        long pending = answers.stream().filter(a -> a.getCorrect() == null).count();
+
+        // 薄弱知识点：行级（每条作答）聚合，与班级报告的"按题聚合"口径区分
+        List<Long> qids = answers.stream().map(AssignmentAnswer::getQuestionId).distinct().toList();
+        Map<Long, QuestionSummaryDTO> qMap = qids.isEmpty() ? Map.of()
+                : questionClient.listByIds(qids).stream().collect(Collectors.toMap(QuestionSummaryDTO::getId, q -> q));
+        List<AssignmentRules.KpRow> kpRows = answers.stream()
+                .map(a -> {
+                    QuestionSummaryDTO q = qMap.get(a.getQuestionId());
+                    return new AssignmentRules.KpRow(q == null ? "" : q.getKpNames(),
+                            a.getCorrect() != null && a.getCorrect() == 1);
+                }).toList();
+
+        // 最近作业成绩趋势（名单倒序=最新在前，取前 10）
+        List<Map<String, Object>> trend = visible.stream().limit(10).map(r -> {
+            Assignment a = assignments.get(r.getAssignmentId());
+            int[] arr = answers.stream().filter(x -> x.getAssignmentId().equals(r.getAssignmentId()))
+                    .reduce(new int[2], (acc, x) -> {
+                        acc[1]++;
+                        if (x.getCorrect() != null && x.getCorrect() == 1) acc[0]++;
+                        return acc;
+                    }, (l, rr) -> l);
+            return Map.<String, Object>of(
+                    "assignmentId", a.getId(), "title", a.getTitle(),
+                    "myStatus", r.getStatus(), "score", r.getScore() == null ? -1 : r.getScore(),
+                    "answered", arr[1],
+                    "correctRatePct", arr[1] == 0 ? null : Math.round(arr[0] * 1000.0 / arr[1]) / 10.0);
+        }).toList();
+
+        List<WrongQuestion> wrongTop = wrongBookSync.wrongTop(studentId, 10);
+        return Map.of(
+                "studentId", studentId,
+                "assignments", visible.size(),
+                "overall", Map.of("answered", answered, "correct", correct, "wrong", wrong,
+                        "pending", pending,
+                        "correctRatePct", answered == 0 ? 0 : Math.round(correct * 1000.0 / answered) / 10.0),
+                "trend", trend,
+                "weakKnowledgePoints", AssignmentRules.kpAggregate(kpRows),
+                "wrongBook", wrongTop.stream().map(w -> Map.<String, Object>of(
+                        "questionId", w.getQuestionId(), "kpNames", w.getKpNames() == null ? "" : w.getKpNames(),
+                        "wrongCount", w.getWrongCount(), "lastWrongAt",
+                        w.getLastWrongAt() == null ? "" : w.getLastWrongAt().toString())).toList());
     }
 
     // ---------- 内部 ----------

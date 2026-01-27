@@ -43,6 +43,7 @@ public class ScanService {
     private final AssignmentAnswerMapper answerMapper;
     private final QuestionClient questionClient;
     private final com.examforge.api.feign.OcrClient ocrClient;
+    private final WrongBookSync wrongBookSync;
 
     private Path baseDir() {
         return Path.of(System.getProperty("java.io.tmpdir"), "examforge-scans");
@@ -228,6 +229,7 @@ public class ScanService {
                 aa.setQuestionId(qid);
                 aa.setCreatedAt(LocalDateTime.now());
             }
+            Integer prev = isNew ? null : aa.getCorrect();      // 旧判分值：错题本差分联动依据
             aa.setAnswer(user);
             aa.setCorrect(right == null ? null : (right ? 1 : 0));
             try {
@@ -237,8 +239,9 @@ public class ScanService {
                         .eq(AssignmentAnswer::getAssignmentId, assignmentId)
                         .eq(AssignmentAnswer::getStudentId, studentId)
                         .eq(AssignmentAnswer::getQuestionId, qid));
-                if (exist != null) { aa.setId(exist.getId()); answerMapper.updateById(aa); }
+                if (exist != null) { prev = exist.getCorrect(); aa.setId(exist.getId()); answerMapper.updateById(aa); }
             }
+            wrongBookSync.sync(studentId, qid, q.getKpNames(), prev, aa.getCorrect());   // 考后诊断：错题本差分联动（修正导入对→错/错→对均正确入本或解决）
             imported++;
             if (right == null) pendingManual++;
             else if (right) correctObjective++;
