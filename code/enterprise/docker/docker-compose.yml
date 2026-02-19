@@ -83,7 +83,9 @@ services:
 
   trade:
     build: { context: .., dockerfile: docker/Dockerfile, args: { MODULE: examforge-trade } }
-    environment: *dbenv
+    environment:
+      <<: *dbenv
+      SCHOOL_URL: http://school:8109
     depends_on:
       mysql: { condition: service_healthy }
 
@@ -111,6 +113,14 @@ services:
     environment:
       <<: *dbenv
       TRADE_URL: http://trade:8105
+    depends_on:
+      mysql: { condition: service_healthy }
+
+  school:
+    build: { context: .., dockerfile: docker/Dockerfile, args: { MODULE: examforge-school } }
+    environment:
+      <<: *dbenv
+      USER_URL: http://user:8101
     depends_on:
       mysql: { condition: service_healthy }
 

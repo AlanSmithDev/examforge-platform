@@ -16,6 +16,7 @@ export default createRouter({
     { path: '/resources', component: () => import('./views/Resources.vue') },
     { path: '/creator', component: () => import('./views/CreatorCenter.vue') },
     { path: '/me', component: () => import('./views/MySpace.vue') },
+    { path: '/school', component: () => import('./views/SchoolAdmin.vue') },
     { path: '/figures', component: () => import('./views/FigureEditor.vue') },
     { path: '/paper-library', component: () => import('./views/PaperLibrary.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' }
