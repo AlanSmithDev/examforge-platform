@@ -25,3 +25,13 @@ examforge:
   search:
     engine: ${SEARCH_ENGINE:db}            # es=启用 Elasticsearch，db=数据库 LIKE
     es-url: ${ES_URL:http://localhost:9200}
+
+# G3 可观测性（docs/19 §5）：Prometheus 指标暴露（/actuator/prometheus，仅内网可达，不经网关路由）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}

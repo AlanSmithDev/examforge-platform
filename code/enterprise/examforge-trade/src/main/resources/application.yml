@@ -27,3 +27,13 @@ mybatis-plus:
 examforge:
   payment:
     provider: MOCK          # MOCK 沙箱 / WECHAT / ALIPAY（生产接验签回调）
+
+# G3 可观测性（docs/19 §5）：Prometheus 指标暴露（/actuator/prometheus，仅内网可达，不经网关路由）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
