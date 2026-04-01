@@ -40,6 +40,17 @@
       <groupId>com.examforge</groupId>
       <artifactId>examforge-api</artifactId>
     </dependency>
+    <!-- D14 支付渠道（docs/14 O-4）：微信支付官方 V3 SDK + 支付宝官方 SDK（Maven Central，按 env 配置启用） -->
+    <dependency>
+      <groupId>com.github.wechatpay-apiv3</groupId>
+      <artifactId>wechatpay-java</artifactId>
+      <version>0.2.14</version>
+    </dependency>
+    <dependency>
+      <groupId>com.alipay.sdk</groupId>
+      <artifactId>alipay-sdk-java</artifactId>
+      <version>4.38.200.ALL</version>
+    </dependency>
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
