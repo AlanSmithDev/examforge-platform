@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能组卷 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+<script defer src="assets/katex-loader.js"></script>
+<style>
+  .steps { display:flex; gap:10px; align-items:center; margin:18px 0 22px; }
+  .step { display:flex; gap:8px; align-items:center; font-size:13.5px; color:var(--text-3); }
+  .step .dot { width:26px; height:26px; border-radius:50%; background:#e2e8f0; color:var(--text-3); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; }
+  .step.on { color:var(--primary); font-weight:700; }
+  .step.on .dot { background:var(--primary); color:#fff; }
+  .step .bar { width:56px; height:2px; background:var(--line); }
+  .panel { display:none; }
+  .panel.on { display:block; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  select.big, input.big { width:100%; border:1px solid var(--line); border-radius:10px; padding:11px 14px; font-size:14.5px; box-sizing:border-box; }
+  .struct-row { display:grid; grid-template-columns:1.2fr .7fr .7fr auto; gap:10px; margin-bottom:10px; align-items:center; }
+  .struct-row select, .struct-row input { border:1px solid var(--line); border-radius:9px; padding:9px 12px; font-size:14px; width:100%; box-sizing:border-box; }
+  .res-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:16px 0; }
+  .res-grid .card { text-align:center; padding:18px; }
+  .res-grid b { font-size:26px; color:var(--primary); }
+  .gen-q { background:#fff; border-radius:12px; padding:12px 16px; margin-bottom:8px; font-size:13.5px; box-shadow:var(--shadow); }
+  .hint { font-size:12.5px; color:var(--text-3); margin-top:6px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a><a href="xuanti.html">章节选题</a><a href="zhineng.html" class="active">智能组卷</a>
+    <a href="mine.html">个人题库</a><a href="vip.html">会员</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="vip.html">登录 / 注册</a>
+  <a class="btn btn-primary" href="xuanti.html">试题篮</a>
+</nav>
+
+<section class="section" style="padding-top:16px;max-width:960px">
+  <div class="steps">
+    <div class="step on" id="st1"><span class="dot">1</span>选择范围</div><div class="bar"></div>
+    <div class="step" id="st2"><span class="dot">2</span>组卷设置</div><div class="bar"></div>
+    <div class="step" id="st3"><span class="dot">3</span>生成结果</div>
+  </div>
+
+  <!-- 步骤 1：选择范围 -->
+  <div class="panel on card" id="p1" style="padding:24px 26px">
+    <h3 style="margin:0 0 14px">① 选择组卷范围</h3>
+    <div class="row2">
+      <div><label class="muted" style="font-size:13px">学段</label>
+        <select class="big" id="wStage" onchange="fillSubjects()" style="margin-top:6px"></select></div>
+      <div><label class="muted" style="font-size:13px">学科（教材版本）</label>
+        <select class="big" id="wSubject" style="margin-top:6px"></select></div>
+    </div>
+    <p class="hint">提示：也可以先在「章节选题」把题目加入试题篮，再用「按试题篮组卷」模式（见下一步）。</p>
+    <div style="display:flex;justify-content:flex-end;margin-top:18px">
+      <button class="btn btn-primary" onclick="gotoStep(2)">下一步：组卷设置 →</button>
+    </div>
+  </div>
+
+  <!-- 步骤 2：组卷设置 -->
+  <div class="panel card" id="p2" style="padding:24px 26px">
+    <h3 style="margin:0 0 6px">② 组卷设置</h3>
+    <div class="row2" style="margin-bottom:14px">
+      <div><label class="muted" style="font-size:13px">试卷标题</label>
+        <input class="big" id="wTitle" value="我的智能试卷" style="margin-top:6px"></div>
+      <div><label class="muted" style="font-size:13px">难度目标（1 易 ~ 5 难）</label>
+        <select class="big" id="wDiff" style="margin-top:6px">
+          <option value="1">1 · 基础巩固</option><option value="2">2 · 略易</option>
+          <option value="3" selected>3 · 标准</option><option value="4">4 · 略难</option><option value="5">5 · 选拔压轴</option>
+        </select></div>
+    </div>
+    <label class="muted" style="font-size:13px">试卷结构（题型 × 数量 × 每题分值）</label>
+    <div id="structRows" style="margin-top:8px"></div>
+    <button class="btn btn-ghost btn-sm" onclick="addStructRow()">+ 添加题型</button>
+    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="saveTemplate()">💾 存为模板</button>
+      <span class="muted" style="font-size:12px">模板选题：</span>
+      <div id="tplChips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <p class="hint">生成规则：按难度目标向两侧就近取题、卷内去重、由易到难排序（组卷引擎详见 docs/05 §4）。</p>
+    <div style="display:flex;justify-content:space-between;margin-top:18px">
+      <button class="btn btn-ghost" onclick="gotoStep(1)">← 上一步</button>
+      <button class="btn btn-grad" id="genBtn" onclick="doGenerate()">开始智能组卷</button>
+    </div>
+  </div>
+
+  <!-- 步骤 3：生成结果 -->
+  <div class="panel card" id="p3" style="padding:24px 26px">
+    <h3 style="margin:0 0 4px">③ 组卷完成</h3>
+    <p class="muted" style="font-size:13px;margin:0">导出/下载在「组卷工作台」进行：会员与免费额度免计费，点数按题量档位计费（比组卷网便宜 50%）</p>
+    <div class="res-grid">
+      <div class="card"><b id="rCount">0</b><div class="muted" style="font-size:12.5px">题目数量</div></div>
+      <div class="card"><b id="rScore">0</b><div class="muted" style="font-size:12.5px">总分</div></div>
+      <div class="card"><b id="rFit">0%</b><div class="muted" style="font-size:12.5px">难度贴合度</div></div>
+    </div>
+    <div class="card" style="padding:14px 18px;margin-bottom:12px">
+      <b style="font-size:13.5px">难度分布（TJ-82）</b>
+      <div id="diffChart" style="display:flex;gap:8px;align-items:flex-end;height:70px;margin-top:8px"></div>
+    </div>
+    <div class="card" style="padding:14px 18px;margin-bottom:12px">
+      <b style="font-size:13.5px">知识点覆盖（<span id="kpCovCount">0</span> 个）</b>
+      <div id="kpCov" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
+    </div>
+    <div id="rList"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="gotoStep(2)">← 返回调整</button>
+      <button class="btn btn-ghost" onclick="showBlueprint()">📋 双向细目表</button>
+      <button class="btn btn-ghost" onclick="genParallel()">🧬 生成平行卷</button>
+      <button class="btn btn-primary" onclick="goWorkbench()">进入组卷工作台 →</button>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:20px"><p><b>智卷云</b> · 智能组卷（接口：POST /papers/generate，规则引擎见 docs/05 §4.1）</p></footer>
+
+<script src="assets/katex-loader.js"></script>
+<script>
+const API = location.protocol.startsWith('http') ? '/api/v1' : 'http://localhost:3000/api/v1';
+const TOKEN = localStorage.getItem('zj_token') || '';
+const AUTH = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+let META = null, lastPaperId = null;
+
+function toast(m){const t=document.getElementById('toast');t.textContent=(m.startsWith('⚠')?'':'✅ ')+m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+function renderMath(scope){ if (typeof window.renderMathInElement === 'function') { try { window.renderMathInElement(scope||document.body,{delimiters:[{left:'\\(',right:'\\)',display:false}]}); } catch(_){} } }
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', ...AUTH, ...(opts.headers || {}) }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({ code: 50010, message: '响应异常' }));
+  if (j.code !== 0) { const e = new Error(j.message); e.code = j.code; e.data = j.data; throw e; }
+  return j.data;
+}
+
+function gotoStep(n) {
+  [1, 2, 3].forEach(i => {
+    document.getElementById('p' + i).classList.toggle('on', i === n);
+    document.getElementById('st' + i).classList.toggle('on', i <= n);
+  });
+  if (n === 2) ensureStructRows();
+}
+
+function fillSubjects() {
+  const sid = Number(document.getElementById('wStage').value);
+  document.getElementById('wSubject').innerHTML = META.subjects.filter(s => s.stage_id === sid)
+    .map(s => `<option value="${s.id}">${s.name} · ${s.version || ''}</option>`).join('') || '<option value="">该学段暂无学科</option>';
+}
+
+function addStructRow(type, count, score) {
+  const row = document.createElement('div');
+  row.className = 'struct-row';
+  row.innerHTML = `<select class="s-type">${META.types.map(t => `<option ${t === (type || '') ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <input class="s-count" type="number" min="1" max="30" value="${count || 6}">
+    <input class="s-score" type="number" min="1" max="50" value="${score || 5}">
+    <button class="btn btn-ghost btn-sm" onclick="this.parentNode.remove()">删除</button>`;
+  document.getElementById('structRows').appendChild(row);
+}
+function ensureStructRows() {
+  if (!document.getElementById('structRows').children.length) {
+    addStructRow('单选题', 8, 5); addStructRow('填空题', 3, 5); addStructRow('解答题', 4, 12);
+  }
+}
+
+async function doGenerate() {
+  const btn = document.getElementById('genBtn'); btn.disabled = true;
+  try {
+    const structure = [...document.querySelectorAll('#structRows .struct-row')].map(r => ({
+      type: r.querySelector('.s-type').value,
+      count: Number(r.querySelector('.s-count').value) || 0,
+      score: Number(r.querySelector('.s-score').value) || 5
+    })).filter(s => s.count > 0);
+    if (!structure.length) { toast('⚠ 请至少配置一种题型'); return; }
+    const d = await api('/papers/generate', { method: 'POST', body: {
+      subjectId: Number(document.getElementById('wSubject').value),
+      title: document.getElementById('wTitle').value.trim() || '智能试卷',
+      structure, difficultyTarget: Number(document.getElementById('wDiff').value) || 3,
+      kp: window.__ctxKp || null
+    } });
+    lastPaperId = d.paperId;
+    localStorage.setItem('zj_last_paper', String(d.paperId));
+    document.getElementById('rCount').textContent = d.count;
+    document.getElementById('rScore').textContent = d.totalScore;
+    document.getElementById('rFit').textContent = Math.round((d.difficultyFit || 0) * 100) + '%';
+    document.getElementById('rList').innerHTML = d.questions.map((q, i) =>
+      `<div class="gen-q"><b>${i + 1}.</b> <span class="chip" style="font-size:11px;padding:1px 8px">${q.type}</span>
+       <span class="muted" style="font-size:12px">难度${q.difficulty} · ${q.score}分</span>
+       <div style="margin-top:4px">${q.stem}</div></div>`).join('');
+    renderMath(document.getElementById('rList'));
+    drawResultCharts(d);
+    gotoStep(3);
+    toast('组卷完成！共 ' + d.count + ' 题');
+  } catch (e) {
+    if (e.code === 40100) toast('⚠ 组卷需要登录，请先到「会员」页登录');
+    else toast('⚠ ' + e.message);
+  } finally { btn.disabled = false; }
+}
+function goWorkbench() {
+  location.href = 'zujuan.html' + (lastPaperId ? '?paperId=' + lastPaperId : '');
+}
+
+// —— TJ-82/83：难度分布 + 知识点覆盖 + 细目表 ——
+let LAST_BLUEPRINT = null;
+function drawResultCharts(d) {
+  LAST_BLUEPRINT = { subjectId: d.subjectId || null, title: d.title || '智能试卷',
+    structure: d.structure || null, difficultyTarget: Number(document.getElementById('wDiff').value) || 3, questions: d.questions };
+  const buckets = [1, 2, 3, 4, 5].map(level => d.questions.filter(q => q.difficulty === level).length);
+  const max = Math.max(...buckets, 1);
+  document.getElementById('diffChart').innerHTML = buckets.map((n, i) =>
+    `<div style="flex:1;text-align:center"><div style="height:${Math.round(n / max * 50 + 4)}px;background:var(--primary);border-radius:6px 6px 0 0;margin:0 auto;width:70%"></div>
+     <div style="font-size:11px;color:var(--text-3)">${'★'.repeat(i + 1)}<br><b>${n}</b></div></div>`).join('');
+  const kpSet = [...new Set(d.questions.map(q => (q.kp || '').split(/[,，]/)[0]).filter(Boolean))];
+  document.getElementById('kpCovCount').textContent = kpSet.length;
+  document.getElementById('kpCov').innerHTML = kpSet.length ? kpSet.map(k => `<span class="chip" style="font-size:11.5px;padding:2px 10px">${k}</span>`).join('') : '<span class="muted" style="font-size:12px">本批题目未标知识点</span>';
+}
+function showBlueprint() {
+  if (!LAST_BLUEPRINT) { toast('⚠ 请先生成试卷'); return; }
+  const qs = LAST_BLUEPRINT.questions;
+  const kps = [...new Set(qs.map(q => (q.kp || '未标注')))];
+  const types = [...new Set(qs.map(q => q.type))];
+  const cell = (kp, ty) => {
+    const rows = qs.filter(q => (q.kp || '未标注') === kp && q.type === ty);
+    if (!rows.length) return '<td style="color:#cbd5e1;text-align:center">·</td>';
+    return `<td style="text-align:center">${rows.map(r => `${r.difficulty}`).join(',')}<br><span class="muted" style="font-size:10px">${rows.length}题</span></td>`;
+  };
+  const html = `<div class="modal" style="display:block;position:relative;width:auto" onclick="event.stopPropagation()">
+    <h3 style="margin-top:0">📋 双向细目表（知识点 × 题型 × 难度）</h3>
+    <div style="overflow:auto"><table class="mini" style="min-width:520px">
+    <thead><tr><th>知识点</th>${types.map(t => `<th>${t}</th>`).join('')}</tr></thead>
+    <tbody>${kps.map(k => `<tr><td><b>${k}</b></td>${types.map(t => cell(k, t)).join('')}</tr>`).join('')}
+    <tr><td><b>合计</b></td>${types.map(t => `<td style="text-align:center"><b>${qs.filter(q => q.type === t).length}</b> 题</td>`).join('')}</tr>
+    </tbody></table></div>
+    <p class="muted" style="font-size:12px">格内数字 = 难度星级（组卷网"细目表组卷"的前置展示，选题型/数量可反推蓝图）</p>
+    <div style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-mask').classList.remove('on')">关闭</button></div></div>`;
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask on';
+  mask.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:60;display:flex;align-items:center;justify-content:center';
+  mask.innerHTML = html;
+  mask.onclick = e => { if (e.target === mask) mask.remove(); };
+  document.body.appendChild(mask);
+}
+// TJ-81：平行卷 —— 同蓝图重抽（排除已用题目）
+async function genParallel() {
+  if (!LAST_BLUEPRINT) { toast('⚠ 请先生成试卷'); return; }
+  try {
+    const d = await api('/papers/generate', { method: 'POST', body: {
+      subjectId: LAST_BLUEPRINT.subjectId, title: (LAST_BLUEPRINT.title || '智能试卷') + '（平行卷）',
+      structure: LAST_BLUEPRINT.structure, difficultyTarget: LAST_BLUEPRINT.difficultyTarget,
+      excludeIds: LAST_BLUEPRINT.questions.map(q => q.id)
+    } });
+    lastPaperId = d.paperId;
+    localStorage.setItem('zj_last_paper', String(d.paperId));
+    document.getElementById('rCount').textContent = d.count;
+    document.getElementById('rScore').textContent = d.totalScore;
+    document.getElementById('rFit').textContent = Math.round((d.difficultyFit || 0) * 100) + '%';
+    document.getElementById('rList').innerHTML = d.questions.map((q, i) =>
+      `<div class="gen-q"><b>${i + 1}.</b> <span class="chip" style="font-size:11px;padding:1px 8px">${q.type}</span>
+       <span class="muted" style="font-size:12px">难度${q.difficulty} · ${q.score}分</span>
+       <div style="margin-top:4px">${q.stem}</div></div>`).join('');
+    renderMath(document.getElementById('rList'));
+    LAST_BLUEPRINT = d.blueprint;
+    drawResultCharts(d);
+    toast('✅ 平行卷已生成（与原卷零重题）');
+  } catch (e) { toast('⚠ ' + e.message); }
+}
+// TJ-80：模板
+async function loadTplChips() {
+  if (!TOKEN) return;
+  try {
+    const d = await api('/papers/templates');
+    document.getElementById('tplChips').innerHTML = d.list.map(t =>
+      `<button class="chip" style="cursor:pointer;border:1px solid var(--line);border-radius:999px;padding:3px 12px;background:#fff;font-size:12px" onclick="applyTpl(${t.id})">${t.name}</button>`).join('');
+  } catch (_) {}
+}
+async function applyTpl(id) {
+  const d = await api('/papers/templates');
+  const t = d.list.find(x => x.id === id);
+  if (!t) return;
+  if (t.subject_id) {
+    const sub = META.subjects.find(s => s.id === t.subject_id);
+    if (sub) { document.getElementById('wStage').value = sub.stage_id; fillSubjects(); document.getElementById('wSubject').value = t.subject_id; }
+  }
+  document.getElementById('wDiff').value = t.difficulty_target;
+  document.getElementById('structRows').innerHTML = '';
+  t.structure.forEach(s => addStructRow(s.type, s.count, s.score));
+  toast('已套用模板：' + t.name);
+}
+async function saveTemplate() {
+  if (!TOKEN) { toast('⚠ 请先登录'); return; }
+  const structure = [...document.querySelectorAll('#structRows .struct-row')].map(r => ({
+    type: r.querySelector('.s-type').value, count: Number(r.querySelector('.s-count').value) || 0, score: Number(r.querySelector('.s-score').value) || 5
+  })).filter(s => s.count > 0);
+  if (!structure.length) { toast('⚠ 结构为空'); return; }
+  const name = prompt('模板名称：', document.getElementById('wTitle').value.trim() || '我的模板');
+  if (!name) return;
+  try {
+    await api('/papers/templates', { method: 'POST', body: { name, subjectId: Number(document.getElementById('wSubject').value) || null, structure, difficultyTarget: Number(document.getElementById('wDiff').value) || 3 } });
+    toast('✅ 模板已保存'); loadTplChips();
+  } catch (e) { toast('⚠ ' + e.message); }
+}
+
+(async function boot() {
+  META = await api('/questions/meta');
+  document.getElementById('wStage').innerHTML = META.stages.map(s => `<option value="${s.id}" ${s.id === 3 ? 'selected' : ''}>${s.name}</option>`).join('');
+  fillSubjects();
+  ensureStructRows();
+  loadTplChips();
+  // TJ-89：章节选题「带当前条件去组卷」——预设知识点/题型
+  const from = new URLSearchParams(location.search).get('from');
+  if (from === 'ctx') {
+    try {
+      const ctx = JSON.parse(localStorage.getItem('zj_compose_ctx') || '{}');
+      if (ctx.kp) window.__ctxKp = ctx.kp;
+      if (ctx.type) { document.getElementById('structRows').innerHTML = ''; addStructRow(ctx.type, 6, 5); }
+      gotoStep(2);
+    } catch (_) { gotoStep(1); }
+  } else gotoStep(from === 'basket' ? 2 : 1);
+})();
+</script>
+</body>
+</html>
