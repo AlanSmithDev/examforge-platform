@@ -26,9 +26,16 @@ public class MockAiProvider implements AiProvider {
     @Override
     public String name() { return "MOCK"; }
 
-    /** MOCK 无视觉能力：显式返回未识别结构，前端降级为人工转录（docs/26 §7 P3 钩子） */
+    /**
+     * MOCK 无视觉能力：
+     * 拍照搜题场景（提示词含"题干"标记，docs/23 §3A）返回确定性伪题干，驱动提取→检索→重排全链路可离线演示；
+     * 其余视觉场景（答题卡扫描转录，docs/26 §7）显式返回未识别结构，前端降级人工转录。
+     */
     @Override
     public String chatVision(String system, String user, String imageBase64, String mime) {
+        if (system != null && system.contains("题干")) {
+            return "{\"recognized\":true,\"stem\":\"已知函数 \\\\(f(x)=\\\\ln x-ax\\\\) 有两个零点，求实数 \\\\(a\\\\) 的取值范围。\"}";
+        }
         return "{\"recognized\":false,\"reason\":\"MOCK Provider 无视觉能力，请人工转录\",\"answers\":[]}";
     }
 }
