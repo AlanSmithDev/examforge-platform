@@ -11,6 +11,11 @@ public final class ExportRules {
     public static final String ANS_SEPARATED = "SEPARATED";
     public static final String ANS_NONE = "NONE";
 
+    /** 作答区模式（docs/25 TJ-111）：NONE 不加（默认）/ LINE 题后答题横线 / BLANK 题后作答空白框 */
+    public static final String AS_NONE = "NONE";
+    public static final String AS_LINE = "LINE";
+    public static final String AS_BLANK = "BLANK";
+
     /** 导出版面：纸张 A4/A3 + 栏数 1/2 + 答案模式 */
     public record Layout(String paper, int columns, String answerMode) {
         public boolean twoColumns() { return columns == 2; }
@@ -50,6 +55,33 @@ public final class ExportRules {
         boolean a3 = PAPER_A3.equals(l.paper());
         return "body { column-count: 2; column-gap: " + (a3 ? "12mm" : "8mm")
                 + "; font-size: " + (a3 ? "12pt" : "10.5pt") + "; }";
+    }
+
+    /** 作答区归一化：LINE/BLANK 大小写兼容，空/未知回退 NONE（不加作答区） */
+    public static String normalizeAnswerSpace(String answerSpace) {
+        return switch (answerSpace == null ? "" : answerSpace.trim().toUpperCase()) {
+            case AS_LINE -> AS_LINE;
+            case AS_BLANK -> AS_BLANK;
+            default -> AS_NONE;
+        };
+    }
+
+    /** 作答区 CSS：横线行（题后留约 10mm 底线）/ 空白框（约 30mm 边框），NONE 返回空串 */
+    public static String answerSpaceCss(String answerSpace) {
+        return switch (answerSpace == null ? AS_NONE : answerSpace) {
+            case AS_LINE -> ".aspace { margin-top: 6mm; border-bottom: 0.4mm solid #000; min-height: 10mm; }";
+            case AS_BLANK -> ".aspace { margin-top: 5mm; border: 0.4mm solid #000; min-height: 30mm; }";
+            default -> "";
+        };
+    }
+
+    /** 产物文件名版面标签（含作答区后缀）：默认 a4c1i；LINE→…ln、BLANK→…bk（长度仍 ≤8，下载白名单兼容） */
+    public static String fileTag(Layout l, String answerSpace) {
+        String base = fileTag(l);
+        String as = answerSpace == null ? AS_NONE : answerSpace;
+        if (AS_LINE.equals(as)) return base + "ln";
+        if (AS_BLANK.equals(as)) return base + "bk";
+        return base;
     }
 
     /** 产物文件名版面标签（paper-{id}-{hash8}-{tag}）：不同版面产物不互相覆盖，如 a4c1i / a3c2s / a4c2n */

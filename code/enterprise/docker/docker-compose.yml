@@ -124,6 +124,23 @@ services:
     depends_on:
       mysql: { condition: service_healthy }
 
+  # G3 监控告警栈（docs/19 §5）：指标抓取 + 告警规则 + 总览看板
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-rules.yml:/etc/prometheus/rules.yml:ro
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment: [ "GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}" ]
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3001:3000"]
+    depends_on: [prometheus]
+
 volumes:
   mysql-data:
   redis-data:
