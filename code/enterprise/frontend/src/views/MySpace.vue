@@ -11,6 +11,7 @@
             <el-button size="small" @click="toggleScope(p)">{{scopeOf(p.id)?'收起范围':'考查范围'}}</el-button>
             <el-button size="small" type="primary" :disabled="p.status!==0" @click="openInsert(p)">插题</el-button>
             <el-button size="small" type="success" @click="openExport(p)">导出</el-button>
+            <el-button size="small" type="warning" plain @click="saveTemplate(p)">存为模板</el-button>
           </div>
         </div>
         <div v-if="scopeOf(p.id)" class="scope-bar">
@@ -37,11 +38,22 @@
     <el-tab-pane label="收藏题目" name="saved"><div class="tab-actions" v-if="savedQuestions.length"><el-button size="small" @click="addSaved">全部加入试题篮</el-button></div><article v-for="q in savedQuestions" :key="q.id" class="space-row"><el-tag size="small">{{q.type}}</el-tag><router-link :to="'/questions/'+q.id">{{plain(q.stem)}}</router-link><el-button :icon="StarFilled" circle text aria-label="取消收藏" @click="toggleSaved(q.id)"/></article><el-empty v-if="!savedQuestions.length" description="暂无收藏题目"/></el-tab-pane>
     <el-tab-pane label="试题篮" name="basket"><article v-for="q in basket" :key="q.id" class="space-row"><el-tag size="small">{{q.type}}</el-tag><router-link :to="'/questions/'+q.id">{{plain(q.stem)}}</router-link><el-button :icon="Delete" circle text aria-label="移除题目" @click="removeQuestion(q.id)"/></article><el-empty v-if="!basket.length" description="试题篮为空"/><div class="tab-actions" v-else><el-button type="primary" @click="$router.push('/papers')">进入组卷工作台</el-button></div></el-tab-pane>
     <el-tab-pane label="我的草稿" name="draft"><article v-if="draft" class="space-row"><el-icon><Document/></el-icon><div class="draft-info"><strong>{{draft.title}}</strong><p>{{draft.questions?.length||0}} 道题 · {{draft.updatedAt?new Date(draft.updatedAt).toLocaleString('zh-CN'):'本机保存'}}</p></div><el-button size="small" type="primary" @click="$router.push('/papers')">继续编辑</el-button></article><el-empty v-else description="暂无本机草稿"/></el-tab-pane>
+    <el-tab-pane label="试卷模板" name="templates">
+      <p class="cloud-hint">模板保存试卷的题目与分值快照，一键复制为新卷（docs/25 TJ-80/TJ-22）。</p>
+      <el-button size="small" style="margin-bottom:14px" @click="loadTemplates">刷新模板</el-button>
+      <el-empty v-if="!templates.length" description="暂无模板：在「云端试卷」中点「存为模板」创建" />
+      <article v-for="t in templates" :key="t.id" class="space-row">
+        <el-icon><Document/></el-icon>
+        <div class="draft-info"><strong>{{t.name}}</strong><p>满分 {{t.totalScore}} 分 · {{(t.createdAt||'').replace('T',' ').slice(0,16)}}</p></div>
+        <el-button size="small" type="primary" @click="applyTemplate(t)">模板出卷</el-button>
+        <el-button size="small" type="danger" text @click="removeTemplate(t)">删除</el-button>
+      </article>
+    </el-tab-pane>
   </el-tabs></div>
 </template>
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { StarFilled, Delete, Document } from '@element-plus/icons-vue'
 import { cloneQuestions } from '../mock'
 import { useWorkspace } from '../composables/workspace'
@@ -55,7 +67,7 @@ function addSaved(){if(addQuestions(savedQuestions.value))ElMessage.success('收
 const papers=ref([]),scopes=ref({}),openScopes=ref({}),inserting=ref(null)
 const insertQid=ref(''),insertPos=ref(''),insertScore=ref('')
 const scopeOf=id=>openScopes.value[id]?scopes.value[id]:null
-onMounted(()=>{if(localStorage.getItem('examforge_token'))loadPapers()})
+onMounted(()=>{if(localStorage.getItem('examforge_token')){loadPapers();loadTemplates()}})
 async function loadPapers(){
   try{papers.value=await http.get('/papers/mine')}catch{papers.value=[]}
   for(const p of papers.value) loadScope(p.id)
@@ -99,6 +111,34 @@ async function doExport(p){
   }catch(err){
     if(err?.response?.status===429)ElMessage.warning(err.response?.data?.message||'点数不足，请充值或升级会员')
   }finally{exportBusy.value=false}
+}
+
+// ---------- 试卷模板（docs/25 TJ-80/TJ-22：存为模板 / 模板选题 / 删除） ----------
+const templates = ref([])
+async function loadTemplates(){
+  try{templates.value=await http.get('/papers/templates')}catch{templates.value=[]}
+}
+async function saveTemplate(p){
+  try{
+    const name = await ElMessageBox.prompt('模板名称（将保存本卷题目与分值快照）', '存为模板', {
+      inputValue: p.title, confirmButtonText: '保存', cancelButtonText: '取消'
+    })
+    const d = await http.post('/papers/'+p.id+'/save-template', { name: name.value })
+    ElMessage.success(`已存为模板「${d.name}」（${d.count} 题 · ${d.totalScore} 分）`)
+    tab.value = 'templates'
+    loadTemplates()
+  }catch(e){ if(e !== 'cancel' && e?.message !== 'cancel') {} }
+}
+async function applyTemplate(t){
+  try{
+    const d = await http.post('/papers/templates/'+t.id+'/apply', {})
+    ElMessage.success(`已生成新卷「${d.title}」（${d.count} 题 · ${d.totalScore} 分）`)
+    tab.value = 'cloud'
+    papers.value = await http.get('/papers/mine')
+  }catch(_){}
+}
+async function removeTemplate(t){
+  try{ await http.delete('/papers/templates/'+t.id); loadTemplates() }catch(_){}
 }
 </script>
 <style scoped>
