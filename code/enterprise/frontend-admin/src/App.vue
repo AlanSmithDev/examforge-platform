@@ -5,6 +5,7 @@
       <h2>智卷云 · 超级管理后台</h2>
       <el-input v-model="lg.mobile" placeholder="手机号" style="margin-bottom:10px" />
       <el-input v-model="lg.password" type="password" placeholder="密码" show-password />
+      <el-input v-model="lg.totp" placeholder="双因子动态码（已启用 TOTP 时必填，6 位）" style="margin-top:10px" />
       <el-button type="primary" style="width:100%;margin-top:14px" @click="login">登录</el-button>
       <p class="tip">种子账号 13000000000 / Admin@123456（SUPER_ADMIN）</p>
     </el-card>
@@ -25,6 +26,7 @@
         <el-menu-item index="contracts">🤝 创作者签约</el-menu-item>
         <el-menu-item index="copyright">⚖️ 版权工单</el-menu-item>
         <el-menu-item index="schools">🏫 学校订阅</el-menu-item>
+        <el-menu-item index="security">🔐 安全设置</el-menu-item>
         <el-menu-item index="audit">🛡 操作审计</el-menu-item>
       </el-menu>
       <el-button style="margin:14px;width:calc(100% - 28px)" @click="logout">退出</el-button>
@@ -286,6 +288,30 @@
         </el-table>
       </div>
 
+      <!-- 安全设置（管理端 TOTP 双因子，docs/20 等保二级） -->
+      <div v-if="pane === 'security'">
+        <h2>安全设置 · 管理端双因子（TOTP，docs/20 §6 等保二级）</h2>
+        <el-alert v-if="totp.enabled" type="success" :closable="false" title="双因子已启用：登录时需输入 Authenticator 动态码" style="margin-bottom:14px" />
+        <template v-if="!totp.enabled">
+          <el-card v-if="!totp.secret" style="margin-bottom:14px">
+            <el-button type="primary" @click="totpSetup">生成绑定密钥</el-button>
+            <span class="tip" style="margin-left:12px">启用后每次登录需输入 6 位动态码</span>
+          </el-card>
+          <el-card v-else style="margin-bottom:14px">
+            <p style="margin:0 0 8px"><b>密钥（在 Authenticator 中手动录入，类型：基于时间）：</b></p>
+            <p style="font-family:monospace;font-size:16px;letter-spacing:2px">{{ totp.secret }}</p>
+            <p class="tip" style="word-break:break-all">{{ totp.otpauthUri }}</p>
+            <el-input v-model="totp.code" placeholder="输入 Authenticator 显示的 6 位动态码" style="width:280px;margin-top:8px" />
+            <el-button type="primary" style="margin-left:8px" @click="totpEnable">验证并启用</el-button>
+            <el-button @click="totpSetup">重新生成</el-button>
+          </el-card>
+        </template>
+        <el-card v-else>
+          <el-button type="danger" @click="totpDisable">解绑双因子</el-button>
+          <span class="tip" style="margin-left:12px">解绑后重新 setup 即可再次启用</span>
+        </el-card>
+      </div>
+
       <!-- 版权工单 -->
       <div v-if="pane === 'copyright'">
         <h2>版权异议 / 申诉工单（异议 → 下架复核；docs/26 F-XKW-14）</h2>
@@ -357,7 +383,7 @@ const kpi = ref({})
 async function loadDash() {
   kpi.value = await api('/admin/dashboard')
 }
-const lg = reactive({ mobile: '13000000000', password: 'Admin@123456' })
+const lg = reactive({ mobile: '13000000000', password: 'Admin@123456', totp: '' })
 const positions = ['home_hero', 'home_banner', 'sidebar_teacher', 'sidebar_student', 'list_inline', 'detail_footer', 'login_promo']
 const ad = reactive({ position: 'home_banner', title: '', imageUrl: '', linkUrl: '', audience: 'ALL', status: 1 })
 const ads = ref([]), notices = ref([]), audits = ref([]), templates = ref([]), auditQ = ref([]), feedbacks = ref([])
@@ -366,19 +392,35 @@ const contracts = ref([])
 const contractForm = reactive({ creatorUserId: null, subject: '', ratePct: 50 })
 const schools = ref([])
 const schoolForm = reactive({ name: '', adminUserId: null, seatLimit: 0, months: 12 })
+const totp = reactive({ enabled: false, secret: '', otpauthUri: '', code: '' })
 const auditStatus = ref(1), fbStatus = ref(0), resStatus = ref(0), appealStatus = ref('OPEN')
 const tpl = reactive({ name: '', type: 'FULL_REDUCTION', discountCents: 100, minSpendCents: 0, total: 100, perLimit: 1, validDays: 30 })
 const notice = reactive({ title: '', content: '' })
 const settings = reactive({ site_name: '', logo_url: '', beian: '', service_phone: '' })
 
 async function login() {
-  const d = await axios.post('/api/v1/auth/admin-login', lg).then(r => r.data.data)
+  let d
+  try {
+    d = await axios.post('/api/v1/auth/admin-login', { ...lg, totp: lg.totp || undefined }).then(r => r.data.data)
+  } catch (e) {
+    const msg = e?.response?.data?.message || ''
+    if (msg.includes('NEED_TOTP')) {
+      try {
+        const r2 = await ElMessageBox.prompt('该账号已启用管理端双因子，请输入 Authenticator 6 位动态码', '两步验证', {
+          confirmButtonText: '验证登录', cancelButtonText: '取消', inputPattern: /^\d{6}$/, inputErrorMessage: '请输入 6 位数字动态码'
+        })
+        d = await axios.post('/api/v1/auth/admin-login', { ...lg, totp: r2.value }).then(r => r.data.data)
+      } catch (_) { return }
+    } else return
+  }
   token.value = d.accessToken
   localStorage.setItem('examforge_admin_token', token.value)
+  lg.totp = ''
   loadAll()
+  try { loadTotp() } catch (_) {}
 }
 function logout() { token.value = ''; localStorage.removeItem('examforge_admin_token') }
-async function loadAll() { loadDash(); loadAds(); loadNotices(); loadAudits(); loadSettings(); loadTemplates(); loadAuditQ(); loadFeedback(); loadRes(); loadAppeals(); loadSla(); loadContracts(); loadSchools() }
+async function loadAll() { loadDash(); loadAds(); loadNotices(); loadAudits(); loadSettings(); loadTemplates(); loadAuditQ(); loadFeedback(); loadRes(); loadAppeals(); loadSla(); loadContracts(); loadSchools(); loadTotp() }
 
 // ---- 创作者签约（examforge-resource /api/v1/resources/admin/creator）----
 async function loadContracts() { contracts.value = (await http.get('/resources/admin/creator/contracts', { params: { page: 1, size: 30 } })).records }
@@ -396,6 +438,31 @@ async function openSchool() {
 }
 async function renewSchool(row) { await http.post('/schools/admin/' + row.id + '/renew', { months: 12 }); ElMessage.success('已续订 12 个月'); loadSchools() }
 async function closeSchool(row) { await http.post('/schools/admin/' + row.id + '/close'); loadSchools() }
+
+// ---- 安全设置（管理端 TOTP 双因子，docs/20 §6）----
+async function loadTotp() {
+  try {
+    const me = await axios.get('/api/v1/auth/totp/state', { headers: { Authorization: 'Bearer ' + (localStorage.getItem('examforge_admin_token') || '') } })
+    totp.enabled = me.data?.data?.enabled || false
+  } catch (_) { totp.enabled = false }
+}
+async function totpSetup() {
+  try {
+    const d = await http.post('/auth/totp/setup')
+    totp.secret = d.secret; totp.otpauthUri = d.otpauthUri; totp.code = ''
+  } catch (_) {}
+}
+async function totpEnable() {
+  if (!/^\d{6}$/.test(totp.code)) { ElMessage.warning('请输入 6 位动态码'); return }
+  try {
+    await http.post('/auth/totp/enable', { code: totp.code })
+    ElMessage.success('双因子已启用，下次登录需输入动态码')
+    totp.enabled = true; totp.secret = ''
+  } catch (_) {}
+}
+async function totpDisable() {
+  try { await http.post('/auth/totp/disable'); totp.enabled = false; totp.secret = ''; ElMessage.success('已解绑') } catch (_) {}
+}
 async function createContract() {
   if (!contractForm.creatorUserId || !contractForm.subject) { ElMessage.warning('创作者ID与签约主体必填'); return }
   await http.post('/resources/admin/creator/contract', { ...contractForm })

@@ -22,5 +22,7 @@ public class User {
     private String memberUntil;
     private String inviteCode;     // 我的邀请码（6位 base36，docs/16 I-1）
     private Long invitedBy;        // 邀请人
+    private String totpSecret;     // TOTP 密钥（Base32，docs/20 等保二级双因子；null=未 setup）
+    private Integer totpEnabled;   // 1=已启用（admin-login 强制校验动态码）
     private LocalDateTime createdAt;
 }

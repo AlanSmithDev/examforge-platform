@@ -25,6 +25,17 @@ class MockAiProviderTest {
     }
 
     @Test
+    void 教学设计场景_返回结构化教案JSON() throws Exception {
+        String out = provider.chat("system", "请生成教学设计。知识点：函数的单调性。");
+        var root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(out);
+        assertTrue(root.has("objectives") && root.get("objectives").isArray());
+        assertTrue(root.has("keyPoints") && root.has("difficulties"));
+        assertTrue(root.has("process") && root.get("process").isArray(), "教学过程四环节");
+        assertTrue(root.has("board"), "板书设计");
+        assertTrue(root.path("aigc").asBoolean(false), "aigc 草稿标识");
+    }
+
+    @Test
     void 名称标识() {
         assertEquals("MOCK", provider.name());
     }
