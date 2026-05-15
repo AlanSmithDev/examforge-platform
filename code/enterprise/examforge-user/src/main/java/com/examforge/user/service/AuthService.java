@@ -8,6 +8,7 @@ import com.examforge.common.web.Result;
 import com.examforge.user.domain.LoginAttempt;
 import com.examforge.user.domain.User;
 import com.examforge.user.logic.LoginGuardRules;
+import com.examforge.user.logic.TotpRules;
 import com.examforge.user.mapper.LoginAttemptMapper;
 import com.examforge.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -86,6 +87,25 @@ public class AuthService {
      * 每次尝试落 login_attempt 流水（等保审计留痕）。ip 取网关透传 X-Forwarded-For，缺省 "unknown"。
      */
     public Result<Map<String, Object>> login(String mobile, String password, String ip) {
+        User u = guardAndAuth(mobile, password, ip);
+        return Result.ok(tokenOf(u));
+    }
+
+    /**
+     * 管理端登录（docs/20 §6 等保二级双因子）：角色校验 + **TOTP 已启用则强制校验动态码**——
+     * 缺失/错误抛 NEED_TOTP（不签发 token），前端引导重登并携带动态码。
+     */
+    public Result<Map<String, Object>> adminLogin(String mobile, String password, String ip, String totpCode) {
+        User u = guardAndAuth(mobile, password, ip);
+        if (!"SUPER_ADMIN".equals(u.getRole()) && !"OP".equals(u.getRole()) && !"EDITOR".equals(u.getRole())) {
+            throw new BizException(Result.UNAUTHORIZED, "该账号无管理端权限");
+        }
+        verifyTotpIfEnabled(u, totpCode);
+        return Result.ok(tokenOf(u));
+    }
+
+    /** 防爆破守卫 + 密码认证（login/adminLogin 共用） */
+    private User guardAndAuth(String mobile, String password, String ip) {
         LocalDateTime now = LocalDateTime.now();
         // 防爆破锁定判定（按 mobile+ip 同源；fail-open：流水查询异常不阻断登录）
         try {
@@ -114,7 +134,61 @@ public class AuthService {
         record(mobile, ip, ok);   // 审计留痕（每次尝试）
         if (!ok) throw new BizException(Result.UNAUTHORIZED, "手机号或密码错误");
         if (u.getStatus() == 0) throw new BizException(Result.FORBIDDEN, "账号已封禁");
-        return Result.ok(tokenOf(u));
+        return u;
+    }
+
+    /** TOTP 已启用则强制校验（缺失/错误 → NEED_TOTP，不发放凭证） */
+    private void verifyTotpIfEnabled(User u, String totpCode) {
+        if (u.getTotpEnabled() != null && u.getTotpEnabled() == 1) {
+            boolean pass = u.getTotpSecret() != null
+                    && TotpRules.verify(u.getTotpSecret(), totpCode, System.currentTimeMillis() / 1000);
+            if (!pass) throw new BizException(Result.UNAUTHORIZED, "NEED_TOTP: 管理端双因子动态码缺失或错误");
+        }
+    }
+
+    /** TOTP 绑定第一步：生成密钥（未启用状态写入，enable 验证通过后才强制） */
+    public Map<String, Object> totpSetup(Long uid) {
+        User u = userMapper.selectById(uid);
+        if (u == null) throw new BizException(Result.NOT_FOUND, "用户不存在");
+        String secret = TotpRules.generateSecret();
+        u.setTotpSecret(secret);
+        u.setTotpEnabled(0);
+        userMapper.updateById(u);
+        return Map.of("secret", secret,
+                "otpauthUri", TotpRules.otpauthUri(secret, u.getMobile(), "SmartPaperCloud-Admin"),
+                "hint", "请用 Authenticator 手动录入密钥，输入 6 位动态码完成启用");
+    }
+
+    /** TOTP 绑定第二步：动态码验证通过后启用（此后 admin-login 强制校验） */
+    public Map<String, Object> totpEnable(Long uid, String code) {
+        User u = userMapper.selectById(uid);
+        if (u == null) throw new BizException(Result.NOT_FOUND, "用户不存在");
+        if (u.getTotpSecret() == null) throw new BizException(Result.BAD_REQUEST, "请先 setup 生成密钥");
+        if (!TotpRules.verify(u.getTotpSecret(), code, System.currentTimeMillis() / 1000)) {
+            throw new BizException(Result.BAD_REQUEST, "动态码校验失败，请确认时间同步后重试");
+        }
+        u.setTotpEnabled(1);
+        userMapper.updateById(u);
+        log.info("管理端 TOTP 已启用: userId={}", uid);
+        return Map.of("enabled", true);
+    }
+
+    /** TOTP 状态（管理端安全设置页；secret 不下发） */
+    public Map<String, Object> totpState(Long uid) {
+        User u = userMapper.selectById(uid);
+        if (u == null) throw new BizException(Result.NOT_FOUND, "用户不存在");
+        return Map.of("enabled", u.getTotpEnabled() != null && u.getTotpEnabled() == 1,
+                "configured", u.getTotpSecret() != null);
+    }
+
+    /** TOTP 解绑（重置密钥与启用状态） */
+    public Map<String, Object> totpDisable(Long uid) {
+        User u = userMapper.selectById(uid);
+        if (u == null) throw new BizException(Result.NOT_FOUND, "用户不存在");
+        u.setTotpEnabled(0);
+        u.setTotpSecret(null);
+        userMapper.updateById(u);
+        return Map.of("enabled", false);
     }
 
     /** 尝试流水落库（fail-open：审计失败不阻断登录主流程） */
