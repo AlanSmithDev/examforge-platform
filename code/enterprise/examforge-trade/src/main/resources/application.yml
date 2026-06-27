@@ -1,0 +1,23 @@
+server:
+  port: 8105
+
+spring:
+  application:
+    name: examforge-trade
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/examforge_trade?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:examforge}
+    password: ${MYSQL_PASSWORD:examforge123}
+  # 下载计费参数（docs/14 §3 P-3 / §6 D-1）
+  examforge:
+    free-downloads-per-day: 3
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+
+examforge:
+  payment:
+    provider: MOCK          # MOCK 沙箱 / WECHAT / ALIPAY（生产接验签回调）
