@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>章节选题 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+<script defer src="assets/katex-loader.js"></script>
+<style>
+  .wrap3 { display:grid; grid-template-columns:240px 1fr 250px; gap:16px; margin-top:18px; align-items:start; }
+  .tree a { display:block; padding:7px 10px; border-radius:8px; font-size:13.5px; color:var(--text-2); cursor:pointer; }
+  .tree a:hover { background:#f1f5f9; }
+  .tree a.on { background:var(--primary); color:#fff; }
+  .tree a.child { padding-left:26px; }
+  .kp-item { display:flex; justify-content:space-between; font-size:13px; padding:6px 10px; border-radius:8px; cursor:pointer; }
+  .kp-item:hover { background:#f1f5f9; }
+  .kp-item.on { background:var(--primary); color:#fff; }
+  .filters { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .filters select, .filters input { border:1px solid var(--line); border-radius:9px; padding:7px 10px; font-size:13px; background:#fff; }
+  .q-card { background:#fff; border-radius:14px; padding:16px 18px; box-shadow:var(--shadow); margin-bottom:12px; }
+  .q-meta { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:12px; color:var(--text-3); margin-bottom:8px; }
+  .q-meta .tag { background:#eef2ff; color:var(--primary); border-radius:999px; padding:2px 10px; font-weight:600; }
+  .q-stem { font-size:14.5px; line-height:1.7; color:var(--text); }
+  .q-opts { margin:8px 0 0 6px; font-size:13.5px; color:var(--text-2); display:grid; gap:3px; }
+  .q-foot { display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
+  .basket-item { display:flex; justify-content:space-between; align-items:center; font-size:12.5px; padding:6px 0; border-bottom:1px dashed var(--line); }
+  .basket-item span:first-child { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pager { display:flex; gap:6px; justify-content:center; margin:16px 0; flex-wrap:wrap; }
+  .pager button { border:1px solid var(--line); background:#fff; border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px; }
+  .pager button.on { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .modal-mask { display:none; position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:50; align-items:center; justify-content:center; }
+  .modal-mask.on { display:flex; }
+  .modal { width:640px; max-width:94vw; max-height:86vh; overflow:auto; background:#fff; border-radius:16px; padding:24px; }
+  .sec-t { font-size:13px; font-weight:700; color:var(--primary); margin:14px 0 6px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a>
+    <a class="active" href="xuanti.html">章节选题</a>
+    <a href="xuanti.html?view=kp">知识点选题</a>
+    <a href="shijuan.html">试卷选题</a>
+    <a href="zhineng.html">智能组卷</a>
+    <a href="mine.html">个人题库</a>
+    <a href="vip.html">会员</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="vip.html" id="userBox">登录 / 注册</a>
+  <a class="btn btn-primary" href="zhineng.html">去组卷</a>
+</nav>
+
+<section class="section" style="padding-top:18px;max-width:1280px">
+  <div class="section-head" style="margin-bottom:0">
+    <h2 id="pageTitle">章节选题</h2>
+    <p>题库全结构化：公式可检索、图形统一白底 —— 浏览与解析查看全部免费，只有下载才计费</p>
+  </div>
+
+  <div class="wrap3">
+    <div class="card" style="padding:14px 12px">
+      <div class="tabs" style="margin-bottom:10px">
+        <button class="on" data-v="chapter" onclick="switchView('chapter')">章节</button>
+        <button data-v="kp" onclick="switchView('kp')">知识点</button>
+      </div>
+      <div class="tree" id="treeBox"><p class="muted" style="font-size:13px">加载中…</p></div>
+    </div>
+
+    <div>
+      <div class="filters">
+        <select id="fStage" onchange="fillSubjects(this.value)"><option value="">全部学段</option></select>
+        <select id="fSubject"><option value="">全部学科</option></select>
+        <select id="fType"><option value="">全部题型</option></select>
+        <select id="fDiff"><option value="">全部难度</option><option value="1">★ 易</option><option value="2">★★</option><option value="3">★★★ 中</option><option value="4">★★★★</option><option value="5">★★★★★ 难</option></select>
+        <select id="fScene"><option value="">全部场景</option></select>
+        <select id="fCat"><option value="">全部分类</option></select>
+        <input id="fKw" placeholder="关键字搜题干/答案" style="width:170px">
+        <select id="fSort"><option value="">综合排序（最热）</option><option value="new">最新收录</option></select>
+        <button class="btn btn-primary btn-sm" onclick="loadQuestions(1)">筛选</button>
+        <button class="btn btn-ghost btn-sm" onclick="resetFilters()">重置</button>
+        <button class="btn btn-grad btn-sm" onclick="composeWithFilters()">⚡ 带当前条件去组卷</button>
+      </div>
+      <div id="qList"><p class="muted">加载中…</p></div>
+      <div class="pager" id="pager"></div>
+    </div>
+
+    <div class="card" style="padding:16px;position:sticky;top:80px">
+      <h3 style="font-size:15px;margin:0 0 4px">🧺 试题篮 <span id="basketCount" style="color:var(--primary)">0</span>/100</h3>
+      <p class="muted" style="font-size:12px;margin:0 0 8px">组卷网免费档 35 题，我们 100 题</p>
+      <div id="basketList"><p class="muted" style="font-size:12.5px">暂无题目</p></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="goCompose()">去智能组卷 →</button>
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="clearBasket()">清空试题篮</button>
+    </div>
+  </div>
+</section>
+
+<div class="modal-mask" id="qMask">
+  <div class="modal" id="qDetail"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:20px"><p><b>智卷云</b> · 章节选题（接口：GET /questions、/basket，详见 docs/17）</p></footer>
+
+<script src="assets/katex-loader.js"></script>
+<script>
+const API = location.protocol.startsWith('http') ? '/api/v1' : 'http://localhost:3000/api/v1';
+const TOKEN = localStorage.getItem('zj_token') || '';
+const AUTH = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+const qs = new URLSearchParams(location.search);
+let view = qs.get('view') === 'kp' ? 'kp' : 'chapter';
+let curFilter = {}, curPage = 1, META = null, basketIdsSet = new Set();
+
+function toast(m){const t=document.getElementById('toast');t.textContent=(m.startsWith('⚠')?'':'✅ ')+m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+function renderMath(scope){ if (typeof window.renderMathInElement === 'function') { try { window.renderMathInElement(scope||document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}]}); } catch(_){} } }
+const stars = d => '★'.repeat(d) + '☆'.repeat(5 - d);
+
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', ...AUTH, ...(opts.headers || {}) }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({ code: 50010, message: '响应异常' }));
+  if (j.code !== 0) { const e = new Error(j.message); e.code = j.code; e.data = j.data; throw e; }
+  return j.data;
+}
+
+async function boot() {
+  if (TOKEN) { try { const me = await api('/member/me'); document.getElementById('userBox').textContent = me.member.active ? '👑 会员用户' : '👤 已登录'; } catch (_) {} }
+  META = await api('/questions/meta');
+  document.getElementById('fStage').innerHTML += META.stages.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  // TJ-06：首页等入口 ?subjectId= 直达预设
+  const preSub = Number(qs.get('subjectId'));
+  if (preSub) {
+    const sub = META.subjects.find(s => s.id === preSub);
+    if (sub) {
+      document.getElementById('fStage').value = sub.stage_id;
+      fillSubjects(sub.stage_id);
+      document.getElementById('fSubject').value = preSub;
+    }
+  } else fillSubjects('');
+  document.getElementById('fType').innerHTML += META.types.map(t => `<option>${t}</option>`).join('');
+  document.getElementById('fScene').innerHTML += META.scenes.map(s => `<option>${s}</option>`).join('');
+  document.getElementById('fCat').innerHTML += META.categories.map(c => `<option>${c}</option>`).join('');
+  switchView(view, true);
+  loadQuestions(1);
+  if (TOKEN) { loadBasket(); loadFavs(); }
+}
+// 学段→学科级联（TJ-06）
+function fillSubjects(stageId) {
+  const sel = document.getElementById('fSubject');
+  sel.innerHTML = '<option value="">全部学科</option>' +
+    META.subjects.filter(s => !stageId || s.stage_id === Number(stageId))
+      .map(s => `<option value="${s.id}">${s.name} · ${s.version || ''}</option>`).join('');
+}
+function switchView(v, silent) {
+  view = v;
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  document.getElementById('pageTitle').textContent = v === 'kp' ? '知识点选题' : '章节选题';
+  curFilter = {};
+  if (v === 'chapter') renderTree();
+  else renderKps();
+  if (!silent) loadQuestions(1);
+}
+
+function renderTree() {
+  const box = document.getElementById('treeBox');
+  const byParent = new Map();
+  META.catalog.forEach(c => { if (!byParent.has(c.parent_id)) byParent.set(c.parent_id, []); byParent.get(c.parent_id).push(c); });
+  let html = `<a class="${!curFilter.kp ? 'on' : ''}" onclick="clearScope()">全部题目</a>`;
+  const walk = (pid, depth) => {
+    for (const c of (byParent.get(pid) || [])) {
+      html += `<a class="${depth ? 'child' : ''}" onclick="pickChapter(${c.id})">${c.name}</a>`;
+      if (depth === 0) walk(c.id, 1);
+    }
+  };
+  walk(0, 0);
+  box.innerHTML = html;
+}
+function clearScope() { curFilter = {}; switchView(view, true); loadQuestions(1); }
+function pickChapter(id) {
+  // MVP：目录名作为知识点关键词联动筛选（正式版走 catalog_id 关联表，见 docs/11 数据模型增量）
+  const c = META.catalog.find(x => x.id === id);
+  curFilter = { kp: c ? c.name : null };
+  renderTree(); loadQuestions(1);
+}
+
+async function renderKps() {
+  const box = document.getElementById('treeBox');
+  box.innerHTML = '<p class="muted" style="font-size:13px">加载中…</p>';
+  try {
+    const d = await api('/questions/kps');
+    box.innerHTML = `<a class="${!curFilter.kp ? 'on' : ''}" onclick="clearScope()">全部知识点</a>` +
+      d.list.map(k => `<div class="kp-item ${curFilter.kp === k.name ? 'on' : ''}" onclick="pickKp('${k.name.replace(/'/g, '')}')"><span>${k.name}</span><b>${k.count}</b></div>`).join('');
+  } catch (_) { box.innerHTML = '<p class="muted">加载失败</p>'; }
+}
+function pickKp(name) { curFilter = { kp: name }; renderKps(); loadQuestions(1); }
+
+function resetFilters() { ['fType','fDiff','fScene','fCat'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fKw').value = ''; curFilter = {}; switchView(view, true); loadQuestions(1); }
+async function loadQuestions(page) {
+  curPage = page;
+  const p = new URLSearchParams();
+  p.set('pageNo', page); p.set('pageSize', 8);
+  if (curFilter.kp) p.set('kp', curFilter.kp);
+  if (document.getElementById('fSubject').value) p.set('subjectId', document.getElementById('fSubject').value);
+  if (document.getElementById('fSort').value) p.set('sort', document.getElementById('fSort').value);
+  ['fType', 'fDiff', 'fScene', 'fCat'].forEach(id => { const v = document.getElementById(id).value; if (v) p.set(id.slice(1).toLowerCase(), v); });
+  const kw = document.getElementById('fKw').value.trim(); if (kw) p.set('keyword', kw);
+  const box = document.getElementById('qList');
+  box.innerHTML = '<p class="muted">加载中…</p>';
+  try {
+    const d = await api('/questions?' + p.toString());
+    if (!d.list.length) { box.innerHTML = '<p class="muted">该条件下暂无题目，换个筛选试试</p>'; document.getElementById('pager').innerHTML = ''; return; }
+    box.innerHTML = d.list.map(qCard).join('');
+    document.getElementById('pager').innerHTML = pagerHtml(d.total, d.pageNo, d.pageSize);
+    renderMath(box);
+  } catch (e) { box.innerHTML = '<p class="muted">加载失败：' + e.message + '</p>'; }
+}
+function qCard(q) {
+  const inBasket = basketIdsSet.has(q.id);
+  return `<div class="q-card">
+    <div class="q-meta"><span class="tag">${q.type}</span><span>难度 ${stars(q.difficulty)}</span>
+      <span>难度系数 ${(q.coefficient || 0).toFixed(2)}</span><span>使用 ${q.use_count} 次</span><span>组卷 ${q.paper_uses ?? 0} 次</span>
+      ${(q.kp_names || '').split(/[,，]/).filter(Boolean).slice(0, 3).map(k => `<span class="chip" style="padding:1px 8px;font-size:11px">${k}</span>`).join('')}</div>
+    <div class="q-stem">${q.stem}</div>
+    ${q.options ? `<div class="q-opts">${q.options.map(o => `<div><b>${o.l}.</b> ${o.v}</div>`).join('')}</div>` : ''}
+    <div class="q-foot"><span class="muted" style="font-size:12px">${q.source || ''}</span>
+      <span>
+        <button class="btn btn-ghost btn-sm" onclick="showDetail(${q.id})">查看解析</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleFav(${q.id}, this)">${favSet.has(q.id) ? '★ 已收藏' : '☆ 收藏'}</button>
+        <button class="btn ${inBasket ? 'btn-ghost' : 'btn-primary'} btn-sm" ${inBasket ? 'disabled' : ''} onclick="addBasket(${q.id})">${inBasket ? '已在试题篮' : '+ 加入试题篮'}</button>
+      </span></div></div>`;
+}
+function pagerHtml(total, pageNo, pageSize) {
+  const pages = Math.ceil(total / pageSize);
+  if (pages <= 1) return '';
+  let html = '';
+  for (let i = 1; i <= Math.min(pages, 10); i++) html += `<button class="${i === pageNo ? 'on' : ''}" onclick="loadQuestions(${i})">${i}</button>`;
+  return html + `<span class="muted" style="font-size:12px;align-self:center">共 ${total} 题</span>`;
+}
+
+function showDetail(id) { location.href = 'timu.html?id=' + id; }
+function closeDetail() { document.getElementById('qMask').classList.remove('on'); }
+document.getElementById('qMask').addEventListener('click', e => { if (e.target.id === 'qMask') closeDetail(); });
+
+async function loadBasket() {
+  try {
+    const d = await api('/basket');
+    basketIdsSet = new Set(d.ids.map(x => x.question_id));
+    renderBasket(d.ids);
+  } catch (_) {}
+}
+function renderBasket(ids) {
+  document.getElementById('basketCount').textContent = ids.length;
+  document.getElementById('basketList').innerHTML = ids.length
+    ? ids.map(x => `<div class="basket-item"><span>#${x.question_id}</span><button class="btn btn-ghost btn-sm" style="padding:2px 8px" onclick="removeBasket(${x.question_id})">移除</button></div>`).join('')
+    : '<p class="muted" style="font-size:12.5px">暂无题目</p>';
+}
+async function addBasket(id) {
+  if (!TOKEN) { toast('⚠ 请先到「会员」页登录'); return; }
+  try {
+    const d = await api('/basket', { method: 'POST', body: { questionIds: [id] } });
+    if (d.added > 0) { basketIdsSet.add(id); toast('已加入试题篮'); loadBasket(); loadQuestions(curPage); }
+    else toast('已在试题篮中');
+  } catch (e) { if (e.code === 40100) toast('⚠ 登录已过期，请重新登录'); else toast('⚠ ' + e.message); }
+}
+async function removeBasket(id) {
+  try { await api('/basket', { method: 'DELETE', body: { questionIds: [id] } }); basketIdsSet.delete(id); loadBasket(); loadQuestions(curPage); } catch (_) {}
+}
+async function clearBasket() {
+  if (!basketIdsSet.size) return;
+  try { await api('/basket', { method: 'DELETE', body: { questionIds: [...basketIdsSet] } }); basketIdsSet.clear(); loadBasket(); loadQuestions(curPage); } catch (_) {}
+}
+function goCompose() {
+  if (!basketIdsSet.size) { toast('⚠ 试题篮是空的，先选题吧'); return; }
+  location.href = 'zhineng.html?from=basket';
+}
+
+// —— 收藏（TJ-85）——
+let favSet = new Set();
+async function loadFavs() {
+  if (!TOKEN) return;
+  try {
+    const d = await api('/papers/favorites?pageNo=1&pageSize=50');
+    favSet = new Set(d.rows.map(q => q.id));
+  } catch (_) {}
+}
+async function toggleFav(id, btn) {
+  if (!TOKEN) { toast('⚠ 请先到「会员」页登录'); return; }
+  try {
+    const d = await api('/papers/favorites', { method: 'POST', body: { questionId: id } });
+    if (d.favorited) { favSet.add(id); toast('★ 已收藏（个人题库可查看）'); }
+    else { favSet.delete(id); toast('已取消收藏'); }
+    loadQuestions(curPage);
+  } catch (e) { toast('⚠ ' + e.message); }
+}
+// TJ-89：带当前条件去组卷
+function composeWithFilters() {
+  const kp = curFilter.kp || '';
+  const sub = document.getElementById('fSubject').value || '';
+  const ty = document.getElementById('fType').value || '';
+  localStorage.setItem('zj_compose_ctx', JSON.stringify({ kp, subjectId: sub, type: ty }));
+  location.href = 'zhineng.html?from=ctx';
+}
+
+boot();
+</script>
+</body>
+</html>
