@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人题库 · 我的 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a>
+    <a href="xuanti.html">章节选题</a>
+    <a href="zsd.html">知识点选题</a>
+    <a href="shijuan.html">试卷选题</a>
+    <a href="zhineng.html">智能组卷</a>
+    <a href="shanghaoke.html">上好课</a>
+    <a href="gaokao.html">高考·名校卷</a>
+    <a href="zhuanji.html">精品专辑</a>
+    <a class="active" href="mine.html">个人题库</a>
+    <a href="vip.html">会员</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="#" onclick="toast('消息中心：3 条未读（审核通过 ×2 / 更新提醒 ×1）')">🔔 消息 3</a>
+  <a class="btn btn-primary" href="zujuan.html">试题篮 · 3</a>
+</nav>
+
+<div class="layout" style="grid-template-columns:278px 1fr;margin-top:22px">
+  <aside>
+    <div class="card" style="padding:18px;margin-bottom:14px;text-align:center">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--grad);color:#fff;font-size:24px;line-height:56px;margin:0 auto 8px;font-weight:800">王</div>
+      <b>王老师</b> <span class="badge blue">已认证·数学</span>
+      <p style="font-size:12.5px;color:var(--text-3);margin-top:4px">江苏省 · 某中学 · 高三备课组</p>
+      <div style="display:flex;justify-content:space-around;margin-top:12px;font-size:13px">
+        <span><b style="color:var(--primary)">2,480</b><br>积分</span>
+        <span><b style="color:var(--primary)">12</b><br>存档</span>
+        <span><b style="color:var(--primary)">36</b><br>下载</span>
+      </div>
+    </div>
+    <div class="card" style="padding:10px 14px">
+      <div class="tree">
+        <a class="chap on" style="justify-content:center">我的试题</a>
+        <a class="chap" style="justify-content:center" href="#" onclick="toast('我的试卷：8 份（含 2 份平行卷）')">我的试卷</a>
+        <a class="chap" style="justify-content:center" href="cuoti.html">❌ 错题本与学情</a>
+        <a class="chap" style="justify-content:center" href="#" onclick="toast('我的专辑：订阅 3 个品牌专栏')">我的专辑</a>
+        <a class="chap" style="justify-content:center" href="#" onclick="toast('打开录题工作台：Word 导入/图片 OCR/画板录图')">✏️ 录题工作台</a>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:13px;color:var(--text-3)">组织方式：<span class="chip on" style="margin:2px">知识点</span><span class="chip" style="margin:2px">章节</span><span class="chip" style="margin:2px">自定义（可拖拽）</span></div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="card" style="padding:16px 22px;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span class="chip on">全部（86）</span><span class="chip">函数与导数（31）</span><span class="chip">圆锥曲线（22）</span>
+      <span class="chip">立体几何（18）</span><span class="chip">自定义分类：高三一轮（15）</span>
+      <span style="margin-left:auto;display:flex;gap:10px">
+        <button class="btn btn-ghost btn-sm" onclick="toast('已勾选 5 题，可批量移除或移入分类')">批量移除</button>
+        <button class="btn btn-primary btn-sm" onclick="toast('已将当前筛选结果全部加入试题篮')">全部加入试题篮</button>
+      </span>
+    </div>
+
+    <div class="grid grid-3">
+      <div class="card"><div class="icon-chip">⬇️</div><h3 style="font-size:15px">我的下载</h3><p style="font-size:13px">今日免费额度 2/3 已用；下载记录 30 天内重复下载免费；全部记录可追溯。</p></div>
+      <div class="card"><div class="icon-chip">📁</div><h3 style="font-size:15px">我的存档</h3><p style="font-size:13px">组卷历史自动版本化（组卷网仅留存 2 天，我们永久保留+版本对比）。</p></div>
+      <div class="card"><div class="icon-chip">🎁</div><h3 style="font-size:15px">积分奖励</h3><p style="font-size:13px">纠错采纳 +5 / 录题上架 +20 / 邀请教师 +50；积分可兑下载券与会员天数。</p></div>
+    </div>
+
+    <div class="card" style="margin-top:14px;padding:18px 22px">
+      <h3 style="font-size:16px;margin-bottom:10px">📅 备考日历（考试月历）</h3>
+      <div class="cal">
+        <div class="ev"><b>9 月</b>开学摸底 · 月考</div>
+        <div class="ev"><b>10 月</b>第一次月考 · 国庆自主复习</div>
+        <div class="ev"><b>11 月</b>期中考试 · 一模启动</div>
+        <div class="ev"><b>12 月</b>一轮收尾 · 冬季联赛</div>
+        <div class="ev"><b>1 月</b>期末 · 合格考</div>
+        <div class="ev"><b>2-3 月</b>二轮 · 一模</div>
+        <div class="ev"><b>4 月</b>二模 · 专项突破</div>
+        <div class="ev"><b>5-6 月</b>三模回归 · 高考</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;padding:18px 22px">
+      <h3 style="font-size:16px;margin-bottom:8px">空状态引导（个人题库为空时）</h3>
+      <p style="font-size:13.5px;color:var(--text-2)">这里还没有内容：可去 <a class="link-btn" href="xuanti.html">章节/知识点分类</a> 把试题添加至自定义分类，或直接收藏；也可以用 <a class="link-btn" href="#contribute">录题工作台</a> 导入自己的题目。</p>
+    </div>
+
+    <!-- 我的下载（TJ-92：下载中心） -->
+    <div class="card" id="myDownloads" style="margin-top:14px;padding:18px 22px;display:none">
+      <h3 style="font-size:16px;margin:0 0 10px">⬇ 我的下载 <span class="muted" style="font-size:12px;font-weight:400">30 天内重复下载不重复计费</span></h3>
+      <table class="mini"><thead><tr><th>试卷</th><th>题数</th><th>计费模式</th><th>扣点</th><th>时间</th></tr></thead><tbody id="dlList"></tbody></table>
+    </div>
+
+    <!-- 我的收藏（TJ-85） -->
+    <div class="card" id="myFavs" style="margin-top:14px;padding:18px 22px;display:none">
+      <h3 style="font-size:16px;margin:0 0 10px">⭐ 我的收藏 <span class="muted" style="font-size:12px;font-weight:400">选题页点 ☆ 收藏</span>
+        <button class="btn btn-primary btn-sm" style="float:right" onclick="favsToBasket()">🧺 全部加入试题篮</button></h3>
+      <div id="favList" style="font-size:13px"></div>
+    </div>
+
+    <!-- 我的试卷与纠错记录（TJ-70/TJ-71） -->
+    <div class="card" id="myPapers" style="margin-top:14px;padding:18px 22px;display:none">
+      <h3 style="font-size:16px;margin:0 0 10px">📄 我的试卷</h3>
+      <div id="papersList" style="font-size:13px"></div>
+    </div>
+    <div class="card" id="myFeedback" style="margin-top:14px;padding:18px 22px;display:none">
+      <h3 style="font-size:16px;margin:0 0 10px">🛠 我的纠错记录 <span class="muted" style="font-size:12px;font-weight:400">采纳 +5 点</span></h3>
+      <div id="fbList" style="font-size:13px"></div>
+    </div>
+
+    <!-- 录题工作台（P-5：录题上架 +20 点，接口 POST /questions/contribute） -->
+    <div class="card" id="contribute" style="margin-top:14px;padding:18px 22px">
+      <h3 style="font-size:16px;margin-bottom:6px">✍️ 录题工作台 <span style="font-size:12.5px;color:var(--text-3);font-weight:400">提交后进入审核队列，上架即奖励 20 点</span></h3>
+      <div id="ctGate" style="display:none;padding:10px 0">
+        <p style="font-size:13.5px;color:var(--text-2)">请先到 <a class="link-btn" href="vip.html">会员页</a> 登录后录题。</p>
+      </div>
+      <div id="ctForm" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+          <select id="ctSubject" style="border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px"></select>
+          <select id="ctType" style="border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px">
+            <option>单选题</option><option>多选题</option><option>填空题</option><option>解答题</option><option>判断题</option></select>
+          <select id="ctDiff" style="border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px">
+            <option value="1">难度 1（易）</option><option value="2">难度 2</option><option value="3" selected>难度 3</option>
+            <option value="4">难度 4</option><option value="5">难度 5（难）</option></select>
+        </div>
+        <input id="ctKp" placeholder="知识点（逗号分隔，如：函数模型,对数的运算）" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px;margin-top:10px">
+        <textarea id="ctStem" rows="3" placeholder="题干（支持 LaTeX 行内式 \( ... \)）" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px;margin-top:10px"></textarea>
+        <input id="ctOpts" placeholder="选项（单选/多选必填，格式：A=选项内容 | B=选项内容）" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px;margin-top:10px">
+        <input id="ctAnswer" placeholder="答案（如：B 或 B,C,D 或解答过程结论）" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px;margin-top:10px">
+        <textarea id="ctAnalysis" rows="2" placeholder="解析（可选：简要思路 / 解答 / 点评）" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:14px;margin-top:10px"></textarea>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="submitContribute()">提交审核</button>
+        <div id="ctMine" style="margin-top:14px;font-size:13px;color:var(--text-2)"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:20px"><p><b>智卷云</b> 原型 · 个人题库与我的（试题/试卷/专辑 · 积分 · 存档 · 下载 · 备考日历）</p></footer>
+<script>
+function toast(msg){const t=document.getElementById('toast');t.textContent=(msg.startsWith('⚠')?'':'✅ ')+msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+/* 录题工作台接线（docs/14 P-5，接口见 docs/17） */
+const API = location.protocol.startsWith('http') ? '/api/v1' : 'http://localhost:3000/api/v1';
+const TOKEN = localStorage.getItem('zj_token') || '';
+const AUTH = { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) };
+async function bootContribute() {
+  if (!TOKEN) { document.getElementById('ctGate').style.display = ''; return; }
+  document.getElementById('ctForm').style.display = '';
+  try {
+    const m = await (await fetch(API + '/questions/meta')).json();
+    document.getElementById('ctSubject').innerHTML = m.data.subjects.map(s => `<option value="${s.id}">${s.name}（${m.data.stages.find(x => x.id === s.stage_id)?.name || ''}）</option>`).join('');
+    const mine = await (await fetch(API + '/questions/contributions/mine', { headers: AUTH })).json();
+    renderMine(mine.data?.list || []);
+    loadMyPapers();
+    loadMyFeedback();
+    loadMyFavs();
+    loadMyDownloads();
+  } catch (_) { toast('⚠ 后端未启动（npm start）'); }
+}
+// TJ-92：我的下载记录
+async function loadMyDownloads() {
+  try {
+    const d = await (await fetch(API + '/trade/downloads?pageNo=1&pageSize=10', { headers: AUTH })).json();
+    document.getElementById('myDownloads').style.display = '';
+    const modeName = { FREE_REPEAT: '重复免费', PAID_ORDER: '已购单卷', LIMITED_FREE: '限时免费', MEMBER: '会员免费', FREE_QUOTA: '免费额度', POINTS: '点数计费' };
+    document.getElementById('dlList').innerHTML = (d.data?.rows || []).map(r => `
+      <tr><td>${r.paper_title}</td><td>${r.question_count} 题</td><td>${modeName[r.charge_mode] || r.charge_mode}</td>
+      <td style="color:${r.points_charged ? '#dc2626' : 'var(--text-3)'}">${r.points_charged ? '-' + r.points_charged : '0'}</td><td>${r.created_at}</td></tr>`).join('')
+      || '<tr><td colspan="5" class="muted">暂无下载记录</td></tr>';
+  } catch (_) {}
+}
+// TJ-85：我的收藏
+async function loadMyFavs() {
+  try {
+    const d = await (await fetch(API + '/papers/favorites?pageNo=1&pageSize=20', { headers: AUTH })).json();
+    document.getElementById('myFavs').style.display = '';
+    document.getElementById('favList').innerHTML = (d.data?.rows || []).map(q => `
+      <div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line)">
+        <span class="chip" style="font-size:11px;padding:1px 8px">${q.type}</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.stem}</span>
+        <button class="btn btn-ghost btn-sm" onclick="unfav(${q.id})">取消收藏</button></div>`).join('')
+      || '<span class="muted">暂无收藏：选题页点 ☆ 收藏题目</span>';
+  } catch (_) {}
+}
+async function unfav(id) {
+  try { await fetch(API + '/papers/favorites', { method: 'POST', headers: AUTH, body: JSON.stringify({ questionId: id }) }); loadMyFavs(); } catch (_) {}
+}
+// TJ-95：收藏批量加入试题篮（对标组卷网 §2.9 批量操作）
+async function favsToBasket() {
+  try {
+    const d = await (await fetch(API + '/papers/favorites?pageNo=1&pageSize=50', { headers: AUTH })).json();
+    const ids = (d.data?.rows || []).map(q => q.id);
+    if (!ids.length) { toast('⚠ 收藏夹为空'); return; }
+    const r = await (await fetch(API + '/basket', { method: 'POST', headers: AUTH, body: JSON.stringify({ questionIds: ids }) })).json();
+    toast(`已加入 ${r.data.added} 题（共 ${ids.length} 题），去「智能组卷」`);
+  } catch (e) { toast('⚠ 请先登录'); }
+}
+// TJ-70：我的试卷列表
+async function loadMyPapers() {
+  try {
+    const d = await (await fetch(API + '/papers', { headers: AUTH })).json();
+    document.getElementById('myPapers').style.display = '';
+    document.getElementById('papersList').innerHTML = (d.data?.list || []).map(p => `
+      <div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line)">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.title}</span>
+        <span class="muted">${p.total_score} 分</span>
+        <a class="btn btn-ghost btn-sm" href="zujuan.html?paperId=${p.id}">工作台</a></div>`).join('')
+      || '<span class="muted">暂无试卷：去「智能组卷」生成一份</span>';
+  } catch (_) {}
+}
+// TJ-71：我的纠错记录
+async function loadMyFeedback() {
+  try {
+    const d = await (await fetch(API + '/questions/feedback/mine', { headers: AUTH })).json();
+    document.getElementById('myFeedback').style.display = '';
+    document.getElementById('fbList').innerHTML = (d.data?.list || []).slice(0, 8).map(f => `
+      <div style="padding:6px 0;border-bottom:1px dashed var(--line)">
+        #${f.question_id} ${f.type} · ${({ PENDING: '⏳ 待处理', ACCEPTED: '✅ 已采纳' + (f.reward_points ? ` +${f.reward_points}点` : ''), REJECTED: '❌ 未采纳' })[f.status] || f.status}
+        <div class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.content}</div></div>`).join('')
+      || '<span class="muted">暂无纠错记录：题目详情页可提交纠错，采纳奖励 5 点</span>';
+  } catch (_) {}
+}
+function renderMine(list) {
+  document.getElementById('ctMine').innerHTML = list.length
+    ? '<b>我的录题：</b><br>' + list.slice(0, 5).map(c => `#${c.id} ${c.type} · ${({ 0: '草稿', 1: '⏳ 审核中', 2: '✅ 已上架', 3: '❌ 已驳回' })[c.status] || c.status}`).join('<br>')
+    : '暂无录题记录';
+}
+async function submitContribute() {
+  const opts = document.getElementById('ctOpts').value.trim();
+  const body = {
+    subjectId: Number(document.getElementById('ctSubject').value),
+    type: document.getElementById('ctType').value,
+    difficulty: Number(document.getElementById('ctDiff').value),
+    kpNames: document.getElementById('ctKp').value.trim() || null,
+    stem: document.getElementById('ctStem').value.trim(),
+    answer: document.getElementById('ctAnswer').value.trim(),
+    analysis: document.getElementById('ctAnalysis').value.trim() || null,
+    options: opts ? opts.split('|').map(s => { const i = s.indexOf('='); return i > 0 ? { l: s.slice(0, i).trim(), v: s.slice(i + 1).trim() } : null; }).filter(Boolean) : undefined
+  };
+  try {
+    const r = await fetch(API + '/questions/contribute', { method: 'POST', headers: AUTH, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (j.code === 0) { toast('录题已提交（#' + j.data.id + '），审核通过上架后 +20 点'); renderMine((await (await fetch(API + '/questions/contributions/mine', { headers: AUTH })).json()).data.list); }
+    else toast('⚠ ' + j.message);
+  } catch (_) { toast('⚠ 后端未启动（npm start）'); }
+}
+bootContribute();
+</script>
+</body>
+</html>
