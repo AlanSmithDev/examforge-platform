@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>精品专辑 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+<script defer src="assets/katex-loader.js"></script>
+<style>
+  .album-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px; margin-top:18px; }
+  .album-card { background:#fff; border-radius:16px; padding:20px 22px; box-shadow:var(--shadow); cursor:pointer; transition:transform .15s; }
+  .album-card:hover { transform:translateY(-3px); }
+  .album-head { display:flex; gap:12px; align-items:center; margin-bottom:10px; }
+  .album-head .cover { width:52px; height:52px; border-radius:12px; background:linear-gradient(135deg,#eef2ff,#e0e7ff); display:flex; align-items:center; justify-content:center; font-size:26px; }
+  .album-head .brand { font-size:11.5px; color:var(--primary); background:#eef2ff; border-radius:999px; padding:1px 10px; font-weight:700; }
+  .album-card p { font-size:13px; color:var(--text-2); margin:6px 0 0; line-height:1.7; }
+  .album-stat { display:flex; gap:14px; font-size:12px; color:var(--text-3); margin-top:10px; }
+  .modal-mask { display:none; position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:50; align-items:center; justify-content:center; }
+  .modal-mask.on { display:flex; }
+  .modal { width:640px; max-width:94vw; max-height:86vh; overflow:auto; background:#fff; border-radius:16px; padding:24px; }
+  .al-paper { display:flex; gap:12px; align-items:center; padding:10px 0; border-bottom:1px dashed var(--line); }
+  .al-paper .info { flex:1; }
+  .al-paper .info b { font-size:14px; }
+  .al-paper .info p { margin:2px 0 0; font-size:12px; color:var(--text-3); }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a><a href="xuanti.html">章节选题</a><a href="shijuan.html">试卷选题</a>
+    <a class="active" href="zhuanji.html">精品专辑</a><a href="mine.html">个人题库</a><a href="vip.html">会员</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="vip.html" id="userBox">登录 / 注册</a>
+  <a class="btn btn-primary" href="zhineng.html">去组卷</a>
+</nav>
+
+<section class="section" style="padding-top:14px;max-width:1080px">
+  <div class="section-head" style="margin-bottom:0">
+    <h2>精品专辑</h2>
+    <p>品牌专栏 · 系列整卷 —— 对标组卷网【上好课】【南京书生】等专栏体系；专辑内整卷可试读/下载（统一计费）</p>
+  </div>
+
+  <div class="album-grid" id="albumGrid"><p class="muted">加载中…</p></div>
+</section>
+
+<!-- 专辑详情弹层 -->
+<div class="modal-mask" id="alMask">
+  <div class="modal" id="alBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:20px"><p><b>智卷云</b> · 精品专辑（接口：GET /papers/albums、/papers/albums/{id}，docs/17）</p></footer>
+
+<script src="assets/katex-loader.js"></script>
+<script>
+const API = location.protocol.startsWith('http') ? '/api/v1' : 'http://localhost:3000/api/v1';
+const TOKEN = localStorage.getItem('zj_token') || '';
+const AUTH = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+
+function toast(m){const t=document.getElementById('toast');t.textContent=(m.startsWith('⚠')?'':'✅ ')+m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', ...AUTH, ...(opts.headers || {}) }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({ code: 50010, message: '响应异常' }));
+  if (j.code !== 0) { const e = new Error(j.message); e.code = j.code; e.data = j.data; throw e; }
+  return j.data;
+}
+
+async function loadAlbums() {
+  const box = document.getElementById('albumGrid');
+  box.innerHTML = '<p class="muted">加载中…</p>';
+  try {
+    const d = await api('/papers/albums');
+    box.innerHTML = d.list.map(a => `<div class="album-card" onclick="openAlbum(${a.id})">
+      <div class="album-head"><div class="cover">${a.cover_emoji || '📚'}</div>
+        <div><h4 style="margin:0;font-size:15.5px">${a.title}</h4><span class="brand">${a.brand || '智卷出品'}</span></div></div>
+      <p>${a.description || ''}</p>
+      <div class="album-stat"><span>共 <b>${a.paper_count}</b> 套</span><span>持续更新</span></div></div>`).join('')
+      || '<p class="muted">暂无专辑</p>';
+  } catch (e) { box.innerHTML = '<p class="muted">加载失败：' + e.message + '</p>'; }
+}
+
+async function openAlbum(id) {
+  const mask = document.getElementById('alMask');
+  document.getElementById('alBody').innerHTML = '<p class="muted">加载中…</p>';
+  mask.classList.add('on');
+  try {
+    const a = await api('/papers/albums/' + id);
+    document.getElementById('alBody').innerHTML = `
+      <h3 style="margin:0 0 4px">${a.cover_emoji || '📚'} ${a.title}</h3>
+      <p class="muted" style="font-size:12.5px;margin:0 0 12px">${a.brand || ''} · 共 ${a.papers.length} 套 · ${a.description || ''}</p>
+      ${a.papers.map(p => `<div class="al-paper">
+        <div class="info"><b>${p.title}</b>
+          <p><span class="lv" style="background:#f1f5f9;border-radius:999px;padding:1px 8px;font-size:11px">${p.level || '普通'}</span>
+             ${p.region} · ${p.year} 年 · ${p.question_count} 题 ${p.total_score} 分 · ⬇ ${p.downloads}</p></div>
+        <button class="btn btn-primary btn-sm" onclick="downloadPaper(${p.id}, '${p.title.replace(/'/g, '')}')">⬇ 整卷下载</button>
+      </div>`).join('')}
+      <div style="text-align:right;margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="closeAl()">关闭</button></div>`;
+  } catch (e) { document.getElementById('alBody').innerHTML = '<p class="muted">加载失败：' + e.message + '</p>'; }
+}
+function closeAl() { document.getElementById('alMask').classList.remove('on'); }
+document.getElementById('alMask').addEventListener('click', e => { if (e.target.id === 'alMask') closeAl(); });
+
+async function downloadPaper(id, title) {
+  if (!TOKEN) { toast('⚠ 整卷下载需登录（计费与版权追溯绑定账号）'); return; }
+  try {
+    const w = window.open('', '_blank');
+    const r = await fetch(API + '/papers/' + id + '/export', { headers: AUTH });
+    if (r.status === 429) {
+      const j = await r.json();
+      if (w) w.close();
+      toast('⚠ ' + j.message + '：需 ' + j.data?.needPoints + ' 点，当前 ' + j.data?.balance + ' 点，去「会员」页充值');
+      return;
+    }
+    if (!r.ok) { if (w) w.close(); toast('⚠ 导出失败'); return; }
+    const html = await r.text();
+    if (w) { w.document.write(html); w.document.close(); toast('✅ 《' + title + '》导出成功'); }
+  } catch (_) { toast('⚠ 后端未启动'); }
+}
+
+(async function boot() {
+  if (TOKEN) { try { const me = await api('/member/me'); document.getElementById('userBox').textContent = me.member.active ? '👑 会员用户' : '👤 已登录'; } catch (_) {} }
+  loadAlbums();
+})();
+</script>
+</body>
+</html>
