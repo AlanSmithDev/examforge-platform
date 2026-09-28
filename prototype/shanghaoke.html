@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>上好课 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+<script defer src="assets/katex-loader.js"></script>
+<style>
+  .sch-tabs { display:flex; gap:8px; margin:18px 0 14px; }
+  .sch-tabs button { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 20px; cursor:pointer; font-size:14px; }
+  .sch-tabs button.on { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .sel-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+  .sel-row select { border:1px solid var(--line); border-radius:10px; padding:10px 14px; font-size:14px; background:#fff; min-width:220px; }
+  .tpl-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; }
+  .tpl { background:#fff; border-radius:14px; padding:18px 20px; box-shadow:var(--shadow); }
+  .tpl h4 { margin:0 0 6px; font-size:15px; }
+  .tpl p { margin:0; font-size:12.5px; color:var(--text-3); line-height:1.7; }
+  .tpl .gen-tag { display:inline-block; background:#eef2ff; color:var(--primary); border-radius:999px; padding:2px 10px; font-size:11.5px; font-weight:700; margin-top:10px; }
+  .res-row { background:#fff; border-radius:14px; padding:14px 18px; box-shadow:var(--shadow); margin-bottom:10px; display:flex; gap:14px; align-items:center; }
+  .res-row .icon { font-size:26px; }
+  .res-row .info { flex:1; }
+  .res-row .info b { font-size:14.5px; }
+  .res-row .info p { margin:2px 0 0; font-size:12px; color:var(--text-3); }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a><a href="xuanti.html">章节选题</a><a class="active" href="shanghaoke.html">上好课</a>
+    <a href="mine.html">个人题库</a><a href="vip.html">会员</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="vip.html" id="userBox">登录 / 注册</a>
+  <a class="btn btn-primary" href="zhineng.html">去组卷</a>
+</nav>
+
+<section class="section" style="padding-top:14px;max-width:1080px">
+  <div class="section-head" style="margin-bottom:0">
+    <h2>上好课 · 备课成套资源</h2>
+    <p>选章节 → 按教学场景一键生成成套卷：课前预习 / 课堂例题 / 随堂检测 / 课后作业（三档） / 单元测试（A/B 卷）</p>
+  </div>
+
+  <div id="gate" class="card" style="padding:30px;text-align:center;display:none">
+    <h3 style="margin-top:0">组卷需登录后使用</h3><a class="btn btn-primary" href="vip.html">去登录 / 注册</a>
+  </div>
+
+  <div id="main">
+    <div class="sch-tabs">
+      <button class="on" data-s="sync">同步教学</button>
+      <button data-s="review">备考复习</button>
+    </div>
+
+    <div class="sel-row">
+      <select id="selStage" onchange="fillSubjects()"></select>
+      <select id="selSubject"></select>
+      <button class="btn btn-primary" onclick="loadTemplates()">载入本节成套资源</button>
+    </div>
+
+    <div class="tpl-grid" id="tplGrid"></div>
+
+    <h3 style="font-size:16px;margin:22px 0 12px" id="resTitle">已生成的教学卷（进工作台导出）</h3>
+    <div id="resList"><p class="muted" style="font-size:13px">暂无：选择章节后点上方模板卡「一键生成」</p></div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:20px"><p><b>智卷云</b> · 上好课（场景模板预设 structure → POST /papers/generate，对标组卷网成套资源）</p></footer>
+
+<script src="assets/katex-loader.js"></script>
+<script>
+const API = location.protocol.startsWith('http') ? '/api/v1' : 'http://localhost:3000/api/v1';
+const TOKEN = localStorage.getItem('zj_token') || '';
+const AUTH = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+let META = null, LAST_PID = null;
+
+function toast(m){const t=document.getElementById('toast');t.textContent=(m.startsWith('⚠')?'':'✅ ')+m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', ...AUTH, ...(opts.headers || {}) }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({ code: 50010, message: '响应异常' }));
+  if (j.code !== 0) { const e = new Error(j.message); e.code = j.code; e.data = j.data; throw e; }
+  return j.data;
+}
+
+// 场景模板（TJ-41）：structure + difficultyTarget 预设，底层走统一组卷引擎
+const TEMPLATES = {
+  sync: [
+    { key: 'preview',  icon: '🌅', name: '课前预习卷', desc: '基础概念 5 题 · 难度 1-2', difficulty: 1, structure: [['单选题', 3, 4], ['判断题', 2, 3]] },
+    { key: 'class',    icon: '🏫', name: '课堂例题卷', desc: '典型例题 8 题 · 难度 3', difficulty: 3, structure: [['单选题', 4, 5], ['解答题', 4, 10]] },
+    { key: 'quiz',     icon: '⏱️', name: '随堂检测卷', desc: '限时检测 10 题 · 难度 3', difficulty: 3, structure: [['单选题', 5, 4], ['填空题', 3, 5], ['判断题', 2, 3]] },
+    { key: 'hw-basic', icon: '📗', name: '课后作业 · 基础', desc: '巩固为主 6 题 · 难度 2', difficulty: 2, structure: [['单选题', 4, 5], ['填空题', 2, 5]] },
+    { key: 'hw-mid',   icon: '📘', name: '课后作业 · 巩固', desc: '标准难度 6 题 · 难度 3', difficulty: 3, structure: [['单选题', 3, 5], ['解答题', 3, 10]] },
+    { key: 'hw-hard',  icon: '📕', name: '课后作业 · 提升', desc: '进阶 6 题 · 难度 4', difficulty: 4, structure: [['多选题', 2, 6], ['解答题', 4, 12]] },
+    { key: 'ut-a',     icon: '📄', name: '单元测试 · A 卷', desc: '标准卷 12 题 · 难度 3', difficulty: 3, structure: [['单选题', 5, 4], ['填空题', 3, 5], ['解答题', 4, 12]] },
+    { key: 'ut-b',     icon: '🧪', name: '单元测试 · B 卷', desc: '加难平行卷 12 题 · 难度 4', difficulty: 4, structure: [['单选题', 5, 4], ['填空题', 3, 5], ['解答题', 4, 12]] }
+  ],
+  review: [
+    { key: 'r1', icon: '1️⃣', name: '一轮复习基础卷', desc: '全覆盖 10 题 · 难度 2-3', difficulty: 2, structure: [['单选题', 6, 5], ['填空题', 4, 5]] },
+    { key: 'r2', icon: '2️⃣', name: '二轮专题强化卷', desc: '综合 10 题 · 难度 4', difficulty: 4, structure: [['单选题', 4, 5], ['解答题', 6, 12]] },
+    { key: 'r3', icon: '3️⃣', name: '三轮模考卷', desc: '仿真 19 题 · 难度 3', difficulty: 3, structure: [['单选题', 8, 5], ['多选题', 3, 6], ['填空题', 3, 5], ['解答题', 5, 12]] }
+  ]
+};
+
+document.querySelectorAll('.sch-tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.sch-tabs button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  loadTemplates();
+});
+
+function fillSubjects() {
+  const sid = Number(document.getElementById('selStage').value);
+  document.getElementById('selSubject').innerHTML = META.subjects.filter(s => s.stage_id === sid)
+    .map(s => `<option value="${s.id}">${s.name} · ${s.version || ''}</option>`).join('');
+}
+function curKp() {
+  // MVP：以学科默认关键词示意章节定位（正式版按 catalog 选择）
+  return document.getElementById('selSubject').selectedOptions[0]?.textContent.split(' · ')[0] || null;
+}
+
+function loadTemplates() {
+  const mode = document.querySelector('.sch-tabs button.on').dataset.s;
+  const grid = document.getElementById('tplGrid');
+  grid.innerHTML = TEMPLATES[mode].map(t => `<div class="tpl">
+    <h4>${t.icon} ${t.name}</h4><p>${t.desc}</p>
+    <span class="gen-tag">结构：${t.structure.map(([ty, n]) => ty + '×' + n).join(' + ')}</span>
+    <button class="btn btn-primary btn-sm" style="width:100%;margin-top:12px" onclick="genPaper('${t.key}')">一键生成</button>
+  </div>`).join('');
+}
+
+async function genPaper(key) {
+  if (!TOKEN) { toast('⚠ 请先到「会员」页登录'); return; }
+  const mode = document.querySelector('.sch-tabs button.on').dataset.s;
+  const t = TEMPLATES[mode].find(x => x.key === key);
+  try {
+    const d = await api('/papers/generate', { method: 'POST', body: {
+      subjectId: Number(document.getElementById('selSubject').value),
+      title: `${t.name}（${new Date().toLocaleDateString('zh-CN')}）`,
+      structure: t.structure.map(([type, count, score]) => ({ type, count, score })),
+      difficultyTarget: t.difficulty
+    } });
+    LAST_PID = d.paperId;
+    localStorage.setItem('zj_last_paper', String(d.paperId));
+    document.getElementById('resTitle').textContent = '已生成的教学卷（进工作台导出）';
+    document.getElementById('resList').innerHTML = `<div class="res-row">
+      <span class="icon">${t.icon}</span>
+      <div class="info"><b>${d.title || t.name}</b><p>${d.count} 题 · 总分 ${d.totalScore} · 难度贴合度 ${Math.round((d.difficultyFit || 0) * 100)}%</p></div>
+      <button class="btn btn-primary btn-sm" onclick="location.href='zujuan.html?paperId=${d.paperId}'">进工作台编辑/导出 →</button>
+    </div>`;
+    toast('✅ 已生成：' + t.name + '（' + d.count + ' 题）');
+  } catch (e) {
+    if (e.code === 40100) toast('⚠ 登录已过期，请重新登录'); else toast('⚠ ' + e.message);
+  }
+}
+
+(async function boot() {
+  if (!TOKEN) { document.getElementById('gate').style.display = ''; document.getElementById('main').style.display = 'none'; return; }
+  try { const me = await api('/member/me'); document.getElementById('userBox').textContent = me.member.active ? '👑 会员用户' : '👤 已登录'; } catch (_) {}
+  META = await api('/questions/meta');
+  document.getElementById('selStage').innerHTML = META.stages.map(s => `<option value="${s.id}" ${s.id === 3 ? 'selected' : ''}>${s.name}</option>`).join('');
+  fillSubjects();
+  loadTemplates();
+})();
+</script>
+</body>
+</html>

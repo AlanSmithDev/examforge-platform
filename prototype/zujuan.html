@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>组卷工作台 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+<script defer src="assets/katex-loader.js"></script>
+<style>
+  .layout2 { display:grid; grid-template-columns:1fr 300px; gap:18px; margin-top:18px; align-items:start; }
+  .toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+  .toolbar input { flex:1; min-width:220px; border:1px solid var(--line); border-radius:10px; padding:10px 14px; font-size:15px; font-weight:600; }
+  .pq { background:#fff; border-radius:14px; padding:14px 18px; box-shadow:var(--shadow); margin-bottom:10px; }
+  .pq-head { display:flex; gap:8px; align-items:center; font-size:12px; color:var(--text-3); margin-bottom:6px; }
+  .pq-head .num { background:var(--primary); color:#fff; border-radius:6px; padding:1px 8px; font-weight:700; }
+  .pq-head .tag { background:#eef2ff; color:var(--primary); border-radius:999px; padding:1px 9px; font-weight:600; }
+  .pq-head .score-in { margin-left:auto; display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text-3); }
+  .pq-head .score-in input { width:52px; border:1px solid var(--line); border-radius:7px; padding:3px 6px; font-size:13px; text-align:center; }
+  .pq-stem { font-size:14px; line-height:1.7; }
+  .pq-new { outline:2px solid #10b981; }
+  .side-card { background:#fff; border-radius:14px; padding:16px 18px; box-shadow:var(--shadow); margin-bottom:14px; }
+  .stat-line { display:flex; justify-content:space-between; font-size:13px; padding:4px 0; }
+  .dirty-dot { width:8px; height:8px; border-radius:50%; background:#f59e0b; display:none; }
+  .dirty-dot.on { display:inline-block; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a><a href="xuanti.html">章节选题</a><a href="zhineng.html">智能组卷</a>
+    <a class="active" href="zujuan.html">组卷工作台</a><a href="mine.html">个人题库</a><a href="vip.html">会员</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="vip.html" id="userBox">登录 / 注册</a>
+  <a class="btn btn-primary" href="xuanti.html">试题篮</a>
+</nav>
+
+<section class="section" style="padding-top:16px;max-width:1180px">
+  <div class="section-head" style="margin-bottom:0">
+    <h2>组卷工作台 <span class="dirty-dot" id="dirtyDot"></span></h2>
+    <p>编辑 · 智能换题 · 导出下载 —— 导出计费：会员不限次 / 免费 3+2 次/日 / 点数按题量档位（1-10 题 100 点起）</p>
+  </div>
+
+  <div id="gate" class="card" style="padding:30px;text-align:center;display:none">
+    <h3 style="margin-top:0">请先登录后使用工作台</h3>
+    <p class="muted">试卷与编辑记录均与账号绑定（导出计费、换题历史可追溯）</p>
+    <a class="btn btn-primary" href="vip.html">去登录 / 注册</a>
+  </div>
+
+  <div class="layout2" id="workbench" style="display:none">
+    <div>
+      <div class="toolbar">
+        <input id="pTitle" placeholder="试卷标题" onchange="markDirty()">
+        <select id="sortSel" onchange="sortPaper(this.value)" style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px;background:#fff">
+          <option value="">排序…</option><option value="diff">由易到难</option><option value="type">按题型分组</option><option value="kp">按知识点</option>
+        </select>
+        <button class="btn btn-ghost" onclick="showBlueprint()">📋 细目表</button>
+        <button class="btn btn-primary" id="saveBtn" onclick="savePaper()">💾 保存修改</button>
+        <button class="btn btn-grad" onclick="doExport()">🖨️ 导出 / 打印</button>
+      </div>
+      <div id="qArea"><p class="muted">加载中…</p></div>
+    </div>
+
+    <div>
+      <div class="side-card">
+        <h3 style="font-size:15px;margin:0 0 8px">📊 试卷概览</h3>
+        <div class="stat-line"><span>题目数量</span><b id="sCount">0</b></div>
+        <div class="stat-line"><span>总分</span><b id="sScore">0</b></div>
+        <div class="stat-line"><span>平均难度</span><b id="sDiff">-</b></div>
+        <div class="stat-line"><span>题型分布</span><b id="sTypes" style="font-size:11px;text-align:right;max-width:150px">-</b></div>
+      </div>
+      <div class="side-card">
+        <h3 style="font-size:15px;margin:0 0 8px">💡 操作说明</h3>
+        <p class="muted" style="font-size:12.5px;margin:0;line-height:1.8">
+          · 每题右侧可改分值、可移除<br>
+          · 「智能换题」按同学科同题型、难度就近推荐冷门题（组卷网同款能力）<br>
+          · 修改后需「保存修改」再导出，导出成功后按规则计费<br>
+          · 30 天内重复导出同一份卷不重复计费</p>
+      </div>
+      <div class="side-card">
+        <h3 style="font-size:15px;margin:0 0 8px">🖨️ 导出设置（TJ-86）</h3>
+        <div class="stat-line"><span>文件格式</span>
+          <select id="eFmt" style="border:1px solid var(--line);border-radius:7px;font-size:12.5px"><option value="html">HTML 打印视图</option><option value="docx">Word（公式可编辑）</option></select></div>
+        <div class="stat-line"><span>答案位置</span>
+          <select id="eAns" style="border:1px solid var(--line);border-radius:7px;font-size:12.5px"><option value="end">卷尾</option><option value="separate">单独答案页</option><option value="none">不含答案</option></select></div>
+        <div class="stat-line"><span>纸张</span>
+          <select id="eSize" style="border:1px solid var(--line);border-radius:7px;font-size:12.5px"><option>A4</option><option>A3</option></select></div>
+        <div class="stat-line"><span>分栏</span>
+          <select id="eCol" style="border:1px solid var(--line);border-radius:7px;font-size:12.5px"><option value="1">单栏</option><option value="2">双栏</option></select></div>
+        <div class="stat-line"><span>字号</span>
+          <select id="eFont" style="border:1px solid var(--line);border-radius:7px;font-size:12.5px"><option value="s">小</option><option value="m" selected>中</option><option value="l">大</option></select></div>
+        <p class="muted" style="font-size:11.5px;margin:8px 0 0">导出含水印（用户 ID 溯源）；Word 公式可编辑导出排期中（docs/22 C5）</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:20px"><p><b>智卷云</b> · 组卷工作台（PUT /papers/:id · POST /papers/:id/replace · GET /papers/{id}/export）</p></footer>
+
+<script src="assets/katex-loader.js"></script>
+<script>
+const API = location.protocol.startsWith('http') ? '/api/v1' : 'http://localhost:3000/api/v1';
+const TOKEN = localStorage.getItem('zj_token') || '';
+const AUTH = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+let PAPER = null, DIRTY = false;
+
+function toast(m){const t=document.getElementById('toast');t.textContent=(m.startsWith('⚠')?'':'✅ ')+m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+function renderMath(scope){ if (typeof window.renderMathInElement === 'function') { try { window.renderMathInElement(scope||document.body,{delimiters:[{left:'\\(',right:'\\)',display:false}]}); } catch(_){} } }
+const stars = d => '★'.repeat(d) + '☆'.repeat(5 - d);
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', ...AUTH, ...(opts.headers || {}) }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({ code: 50010, message: '响应异常' }));
+  if (j.code !== 0) { const e = new Error(j.message); e.code = j.code; e.data = j.data; throw e; }
+  return j.data;
+}
+function markDirty() { DIRTY = true; document.getElementById('dirtyDot').classList.add('on'); }
+function clearDirty() { DIRTY = false; document.getElementById('dirtyDot').classList.remove('on'); }
+
+async function boot() {
+  if (!TOKEN) { document.getElementById('gate').style.display = ''; return; }
+  try { const me = await api('/member/me'); document.getElementById('userBox').textContent = me.member.active ? '👑 会员用户' : '👤 已登录'; } catch (_) {}
+  const pid = new URLSearchParams(location.search).get('paperId') || localStorage.getItem('zj_last_paper');
+  if (!pid) { document.getElementById('gate').style.display = ''; document.querySelector('#gate h3').textContent = '还没有试卷';
+    document.querySelector('#gate p').textContent = '先去「智能组卷」生成一份，或直接在工作台快速组卷'; return; }
+  document.getElementById('workbench').style.display = '';
+  await loadPaper(pid);
+}
+window.onbeforeunload = () => { if (DIRTY) return '有未保存的修改'; };
+
+async function loadPaper(pid) {
+  try {
+    PAPER = await api('/papers/' + pid);
+    render();
+  } catch (e) {
+    if (e.code === 40400) { document.getElementById('qArea').innerHTML = '<p class="muted">试卷不存在或无权访问</p>'; }
+    else if (e.code === 40100) { document.getElementById('gate').style.display = ''; }
+  }
+}
+
+function render() {
+  document.getElementById('pTitle').value = PAPER.title;
+  const types = {};
+  PAPER.questions.forEach(q => { types[q.type] = (types[q.type] || 0) + 1; });
+  const avgDiff = PAPER.questions.length ? (PAPER.questions.reduce((s, q) => s + q.difficulty, 0) / PAPER.questions.length).toFixed(1) : '-';
+  document.getElementById('sCount').textContent = PAPER.questions.length;
+  document.getElementById('sScore').textContent = PAPER.questions.reduce((s, q) => s + (Number(q._score ?? q.score) || 0), 0);
+  document.getElementById('sDiff').textContent = avgDiff;
+  document.getElementById('sTypes').textContent = Object.entries(types).map(([t, n]) => `${t}×${n}`).join(' ');
+  document.getElementById('qArea').innerHTML = PAPER.questions.map((q, i) => `
+    <div class="pq ${q._isNew ? 'pq-new' : ''}" data-qid="${q.id}">
+      <div class="pq-head"><span class="num">${i + 1}</span><span class="tag">${q.type}</span>
+        <span>难度 ${stars(q.difficulty)}</span>${(q.kp_names || '').split(/[,，]/)[0] ? `<span>${q.kp_names.split(/[,，]/)[0]}</span>` : ''}
+        <span class="score-in"><input type="number" min="1" max="50" value="${q._score ?? q.score}" onchange="chScore(${i}, this.value)"> 分</span></div>
+      <div class="pq-stem">${q.stem}</div>
+      ${q.options ? `<div class="q-opts" style="margin-top:6px;font-size:13px;color:var(--text-2);display:grid;gap:2px">${q.options.map(o => `<div><b>${o.l}.</b> ${o.v}</div>`).join('')}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" onclick="moveQ(${i}, -1)" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button class="btn btn-ghost btn-sm" onclick="moveQ(${i}, 1)" ${i === PAPER.questions.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="btn btn-ghost btn-sm" onclick="replaceQ(${i})">🎲 智能换题</button>
+        <button class="btn btn-ghost btn-sm" style="color:#dc2626" onclick="removeQ(${i})">移除</button>
+      </div></div>`).join('');
+  renderMath(document.getElementById('qArea'));
+}
+
+function chScore(i, v) { PAPER.questions[i]._score = Math.max(1, Math.min(50, Number(v) || 1)); markDirty(); render(); }
+// TJ-87：工作台一键排序
+function sortPaper(mode) {
+  if (!mode) return;
+  const qs = PAPER.questions;
+  if (mode === 'diff') qs.sort((a, b) => a.difficulty - b.difficulty);
+  else if (mode === 'type') qs.sort((a, b) => a.type.localeCompare(b.type, 'zh') || a.difficulty - b.difficulty);
+  else if (mode === 'kp') qs.sort((a, b) => (a.kp_names || '未标注').localeCompare(b.kp_names || '未标注', 'zh') || a.difficulty - b.difficulty);
+  markDirty(); render();
+  toast('已排序，记得「保存修改」');
+}
+// TJ-83：双向细目表（工作台版）
+function showBlueprint() {
+  const qs = PAPER.questions;
+  if (!qs.length) { toast('⚠ 试卷为空'); return; }
+  const kps = [...new Set(qs.map(q => (q.kp_names || '').split(/[,，]/)[0] || '未标注'))];
+  const types = [...new Set(qs.map(q => q.type))];
+  const cell = (kp, ty) => {
+    const rows = qs.filter(q => ((q.kp_names || '').split(/[,，]/)[0] || '未标注') === kp && q.type === ty);
+    if (!rows.length) return '<td style="color:#cbd5e1;text-align:center">·</td>';
+    return `<td style="text-align:center">${rows.map(r => r.difficulty).join(',')}<br><span class="muted" style="font-size:10px">${rows.length}题</span></td>`;
+  };
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask on';
+  mask.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:60;display:flex;align-items:center;justify-content:center';
+  mask.innerHTML = `<div class="modal" style="width:auto;max-width:92vw">
+    <h3 style="margin-top:0">📋 双向细目表（知识点 × 题型 × 难度）</h3>
+    <div style="overflow:auto"><table class="mini" style="min-width:520px">
+    <thead><tr><th>知识点</th>${types.map(t => `<th>${t}</th>`).join('')}</tr></thead>
+    <tbody>${kps.map(k => `<tr><td><b>${k}</b></td>${types.map(t => cell(k, t)).join('')}</tr>`).join('')}
+    <tr><td><b>合计</b></td>${types.map(t => `<td style="text-align:center"><b>${qs.filter(q => q.type === t).length}</b> 题</td>`).join('')}</tr>
+    </tbody></table></div>
+    <div style="text-align:right;margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-mask').remove()">关闭</button></div></div>`;
+  mask.onclick = e => { if (e.target === mask) mask.remove(); };
+  document.body.appendChild(mask);
+}
+function removeQ(i) { if (!confirm('移除第 ' + (i + 1) + ' 题？')) return; PAPER.questions.splice(i, 1); markDirty(); render(); }
+function moveQ(i, dir) {
+  const j = i + dir; if (j < 0 || j >= PAPER.questions.length) return;
+  [PAPER.questions[i], PAPER.questions[j]] = [PAPER.questions[j], PAPER.questions[i]];
+  markDirty(); render();
+}
+async function replaceQ(i) {
+  const q = PAPER.questions[i];
+  try {
+    const d = await api('/papers/' + PAPER.id + '/replace', { method: 'POST', body: { questionId: q.id } });
+    const added = d.added; added._score = q._score ?? q.score; added._isNew = true;
+    PAPER.questions[i] = added;
+    markDirty(); render();
+    toast('已换题：新题 #' + added.id + '（' + added.type + ' · 难度' + added.difficulty + '），记得保存');
+  } catch (e) { toast('⚠ ' + e.message); }
+}
+async function savePaper() {
+  if (!PAPER.questions.length) { toast('⚠ 试卷至少保留 1 道题'); return; }
+  const btn = document.getElementById('saveBtn'); btn.disabled = true;
+  try {
+    const d = await api('/papers/' + PAPER.id, { method: 'PUT', body: {
+      title: document.getElementById('pTitle').value.trim() || PAPER.title,
+      questions: PAPER.questions.map(q => ({ questionId: q.id, score: q._score ?? q.score }))
+    } });
+    PAPER.title = d.title; clearDirty();
+    await loadPaper(PAPER.id);
+    toast('✅ 已保存：' + d.count + ' 题 · 总分 ' + d.totalScore);
+  } catch (e) { toast('⚠ ' + e.message); } finally { btn.disabled = false; }
+}
+async function doExport() {
+  if (DIRTY && !confirm('有未保存的修改，导出将使用已保存版本。继续导出？')) return;
+  const p = new URLSearchParams({
+    format: document.getElementById('eFmt').value,
+    answerPos: document.getElementById('eAns').value,
+    paperSize: document.getElementById('eSize').value,
+    columns: document.getElementById('eCol').value,
+    fontSize: document.getElementById('eFont').value
+  });
+  try {
+    if (p.get('format') === 'docx') {
+      // Word 原生公式导出（TJ-100）：blob 下载
+      const r = await fetch(API + '/papers/' + PAPER.id + '/export?' + p.toString(), { headers: AUTH });
+      if (r.status === 429) {
+        const j = await r.json();
+        toast('⚠ ' + j.message + '：需 ' + j.data?.needPoints + ' 点，当前 ' + j.data?.balance + ' 点，去「会员」页充值');
+        return;
+      }
+      if (!r.ok) { toast('⚠ Word 导出失败（HTTP ' + r.status + '）'); return; }
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (PAPER.title || '试卷') + '.docx';
+      a.click(); URL.revokeObjectURL(a.href);
+      toast('✅ Word 已下载：' + r.headers.get('x-math-count') + ' 条公式为原生可编辑公式');
+      return;
+    }
+    const w = window.open('', '_blank');
+    const r = await fetch(API + '/papers/' + PAPER.id + '/export?' + p.toString(), { headers: AUTH });
+    if (r.status === 429) {
+      const j = await r.json();
+      if (w) w.close();
+      toast('⚠ ' + j.message + '：需 ' + j.data?.needPoints + ' 点，当前 ' + j.data?.balance + ' 点，去「会员」页充值');
+      return;
+    }
+    if (!r.ok) { if (w) w.close(); toast('⚠ 导出失败（HTTP ' + r.status + '）'); return; }
+    const html = await r.text();
+    if (w) { w.document.write(html); w.document.close(); toast('✅ 导出成功，可 Ctrl+P 打印或存 PDF'); }
+  } catch (_) { toast('⚠ 后端未启动（npm start 后可用）'); }
+}
+
+boot();
+</script>
+</body>
+</html>

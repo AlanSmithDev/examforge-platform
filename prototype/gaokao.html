@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高考专区 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .countdown { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; max-width:520px; }
+  .countdown .card { text-align:center; padding:16px 8px; }
+  .countdown b { font-size:32px; color:var(--primary); }
+  .countdown span { display:block; font-size:12px; color:var(--text-3); }
+  .year-tabs { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0; }
+  .year-tabs button { border:1px solid var(--line); background:#fff; border-radius:999px; padding:6px 16px; cursor:pointer; font-size:13px; }
+  .year-tabs button.on { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .paper-row { background:#fff; border-radius:14px; padding:14px 18px; box-shadow:var(--shadow); margin-bottom:10px; display:flex; gap:14px; align-items:center; }
+  .paper-row .info { flex:1; }
+  .paper-row .info b { font-size:14.5px; }
+  .paper-row .info p { margin:2px 0 0; font-size:12px; color:var(--text-3); }
+  .sec-t { font-size:16px; margin:22px 0 10px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a><a href="xuanti.html">章节选题</a><a href="shijuan.html">试卷选题</a>
+    <a class="active" href="gaokao.html">高考专区</a><a href="zhuanji.html">精品专辑</a><a href="vip.html">会员</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="vip.html" id="userBox">登录 / 注册</a>
+  <a class="btn btn-primary" href="zhineng.html">去组卷</a>
+</nav>
+
+<section class="section" style="padding-top:14px;max-width:1080px">
+  <div class="section-head" style="margin-bottom:0">
+    <h2>高考专区</h2>
+    <p>真题按年份筛选 · 最新模拟卷 · 高考倒计时 —— 整卷下载走统一计费（对标组卷网 /gkzq）</p>
+  </div>
+
+  <div class="card" style="padding:20px 24px;margin-top:16px">
+    <h3 style="margin:0 0 12px;font-size:16px">⏰ 2027 高考倒计时</h3>
+    <div class="countdown" id="cd">
+      <div class="card"><b id="cdD">--</b><span>天</span></div>
+      <div class="card"><b id="cdH">--</b><span>时</span></div>
+      <div class="card"><b id="cdM">--</b><span>分</span></div>
+      <div class="card"><b id="cdS">--</b><span>秒</span></div>
+    </div>
+    <p class="muted" style="font-size:12px;margin-top:10px">目标日期：2027-06-07 09:00（若考试时间调整以教育部公告为准）</p>
+  </div>
+
+  <h3 class="sec-t">📚 真题与模拟卷（按年份）</h3>
+  <div class="year-tabs" id="yearTabs">
+    <button class="on" data-y="">全部年份</button>
+    <button data-y="2026">2026</button>
+    <button data-y="2025">2025</button>
+  </div>
+  <div id="paperList"><p class="muted">加载中…</p></div>
+
+  <h3 class="sec-t">🧭 快捷入口</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
+    <a class="card" href="xuanti.html?view=kp" style="padding:16px 18px"><b>考点选题</b><p class="muted" style="font-size:12.5px;margin:4px 0 0">按知识点抽高考考法题</p></a>
+    <a class="card" href="zhineng.html" style="padding:16px 18px"><b>智能组卷</b><p class="muted" style="font-size:12.5px;margin:4px 0 0">难度目标 4-5 压轴特训</p></a>
+    <a class="card" href="sousoti.html" style="padding:16px 18px"><b>AI 搜题讲题</b><p class="muted" style="font-size:12.5px;margin:4px 0 0">真题逐题分步讲解</p></a>
+    <a class="card" href="zhuanji.html" style="padding:16px 18px"><b>高考备考专辑</b><p class="muted" style="font-size:12.5px;margin:4px 0 0">模拟与真题系列</p></a>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:20px"><p><b>智卷云</b> · 高考专区（接口：GET /papers/public?category=高考备考，docs/17 §6.6）</p></footer>
+
+<script>
+const API = location.protocol.startsWith('http') ? '/api/v1' : 'http://localhost:3000/api/v1';
+const TOKEN = localStorage.getItem('zj_token') || '';
+const AUTH = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+let YEAR = '';
+
+function toast(m){const t=document.getElementById('toast');t.textContent=(m.startsWith('⚠')?'':'✅ ')+m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', ...AUTH, ...(opts.headers || {}) }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({ code: 50010, message: '响应异常' }));
+  if (j.code !== 0) { const e = new Error(j.message); e.code = j.code; e.data = j.data; throw e; }
+  return j.data;
+}
+// 高考倒计时（§2.6）
+function tick() {
+  const target = new Date('2027-06-07T09:00:00');
+  const diff = Math.max(0, target - new Date());
+  const d = Math.floor(diff / 86400000), h = Math.floor(diff / 3600000) % 24,
+        m = Math.floor(diff / 60000) % 60, s = Math.floor(diff / 1000) % 60;
+  cdD.textContent = d; cdH.textContent = h; cdM.textContent = m; cdS.textContent = s;
+}
+setInterval(tick, 1000); tick();
+
+document.querySelectorAll('#yearTabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#yearTabs button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); YEAR = b.dataset.y; loadPapers();
+});
+async function loadPapers() {
+  const box = document.getElementById('paperList');
+  box.innerHTML = '<p class="muted">加载中…</p>';
+  try {
+    const p = new URLSearchParams({ category: '高考备考', pageNo: 1, pageSize: 10 });
+    if (YEAR) p.set('year', YEAR);
+    const d = await api('/papers/public?' + p.toString());
+    box.innerHTML = d.rows.map(r => `<div class="paper-row">
+      <div class="info"><b>${r.title}</b>
+        <p><span style="background:#f1f5f9;border-radius:999px;padding:1px 8px;font-size:11px">${r.level || '普通'}</span>
+           ${r.region} · ${r.year} 年 · ${r.question_count} 题 ${r.total_score} 分 · ⬇ ${r.downloads}</p></div>
+      <button class="btn btn-primary btn-sm" onclick="downloadPaper(${r.id}, '', '试卷')">⬇ 下载</button>
+      <button class="btn btn-ghost btn-sm" onclick="downloadPaper(${r.id}, 'docx', '试卷')">🅆 Word</button>
+    </div>`).join('') || '<p class="muted">该年份暂无试卷</p>';
+  } catch (e) { box.innerHTML = '<p class="muted">加载失败：' + e.message + '</p>'; }
+}
+async function downloadPaper(id, format, title) {
+  if (!TOKEN) { toast('⚠ 整卷下载需登录'); return; }
+  try {
+    const w = window.open('', '_blank');
+    const r = await fetch(API + '/papers/' + id + '/export' + (format === 'docx' ? '?format=docx' : ''), { headers: AUTH });
+    if (format === 'docx') {
+      if (!r.ok) { toast('⚠ Word 导出失败'); return; }
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'zhijuan-' + id + '.docx';
+      a.click(); URL.revokeObjectURL(a.href);
+      toast('✅ Word 已下载（公式可编辑）');
+      return;
+    }
+    if (r.status === 429) {
+      const j = await r.json(); if (w) w.close();
+      toast('⚠ ' + j.message + '：需 ' + j.data?.needPoints + ' 点，当前 ' + j.data?.balance + ' 点'); return;
+    }
+    if (!r.ok) { if (w) w.close(); toast('⚠ 导出失败'); return; }
+    const html = await r.text();
+    if (w) { w.document.write(html); w.document.close(); toast('✅ 导出成功'); }
+  } catch (_) { toast('⚠ 后端未启动'); }
+}
+
+(async function boot() {
+  if (TOKEN) { try { const me = await api('/member/me'); document.getElementById('userBox').textContent = me.member.active ? '👑 会员用户' : '👤 已登录'; } catch (_) {} }
+  loadPapers();
+})();
+</script>
+</body>
+</html>

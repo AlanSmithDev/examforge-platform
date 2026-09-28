@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>题目详情 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+<script defer src="assets/katex-loader.js"></script>
+<style>
+  .layout2 { display:grid; grid-template-columns:1fr 300px; gap:18px; margin-top:18px; align-items:start; }
+  .q-head { display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:12.5px; color:var(--text-3); margin-bottom:10px; }
+  .q-head .tag { background:#eef2ff; color:var(--primary); border-radius:999px; padding:2px 11px; font-weight:700; }
+  .q-stem { font-size:15px; line-height:1.8; }
+  .q-opts { margin:10px 0 0 6px; font-size:14px; color:var(--text-2); display:grid; gap:4px; }
+  .sec { margin-top:14px; border-top:1px dashed var(--line); padding-top:12px; }
+  .sec .t { font-size:13px; font-weight:700; color:var(--primary); margin-bottom:6px; }
+  .sec .c { font-size:13.5px; color:var(--text-2); line-height:1.8; }
+  .acts { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .sim { padding:10px 0; border-bottom:1px dashed var(--line); font-size:13.5px; cursor:pointer; }
+  .sim .m { font-size:11.5px; color:var(--text-3); margin-top:3px; }
+  .fb-types { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
+  .fb-types .chip { cursor:pointer; }
+  .fb-types .chip.on { background:var(--primary); color:#fff; }
+  .ai-steps { background:linear-gradient(135deg,#eef2ff,#e0e7ff); border-radius:12px; padding:14px 18px; font-size:13.5px; line-height:1.9; white-space:pre-wrap; margin-top:10px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a><a href="xuanti.html">章节选题</a><a href="zhineng.html">智能组卷</a>
+    <a href="mine.html">个人题库</a><a href="vip.html">会员</a><a href="messages.html">🔔 消息</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="vip.html" id="userBox">登录 / 注册</a>
+  <a class="btn btn-primary" href="zhineng.html">去组卷</a>
+</nav>
+
+<section class="section" style="padding-top:14px;max-width:1080px">
+  <div class="section-head" style="margin-bottom:0">
+    <h2>题目详情 <span class="muted" style="font-size:13px;font-weight:400" id="shareTip">独立 URL 可分享：浏览器地址栏即为该题永久链接</span></h2>
+  </div>
+
+  <div id="gate" class="card" style="padding:26px;text-align:center;display:none">
+    <h3 style="margin-top:0" id="gateTitle">未指定题目</h3>
+    <p class="muted">从「章节选题」或「AI 搜」进入任意题目即可获得可分享的独立链接</p>
+    <a class="btn btn-primary" href="xuanti.html">去选题</a>
+  </div>
+
+  <div class="layout2" id="main" style="display:none">
+    <div>
+      <div class="card" style="padding:20px 24px">
+        <div class="q-head" id="qHead"></div>
+        <div class="q-stem" id="qStem"></div>
+        <div class="q-opts" id="qOpts"></div>
+        <div class="acts">
+          <button class="btn btn-ghost btn-sm" id="favBtn" onclick="toggleFav()">☆ 收藏</button>
+          <button class="btn btn-ghost btn-sm" onclick="addBasket()">+ 加入试题篮</button>
+          <button class="btn btn-ghost btn-sm" onclick="aiExplain()">🎓 AI 分步讲题</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('fbSec').scrollIntoView({behavior:'smooth'})">纠错</button>
+        </div>
+        <div class="sec"><div class="t">答案</div><div class="c" id="secAnswer"></div></div>
+        <div class="sec"><div class="t">分析</div><div class="c" id="secBrief"></div></div>
+        <div class="sec"><div class="t">解答</div><div class="c" id="secSolve"></div></div>
+        <div class="sec"><div class="t">点评</div><div class="c" id="secComment"></div></div>
+      </div>
+
+      <!-- 纠错（TJ-90：绑定当前题目 ID） -->
+      <div class="card" id="fbSec" style="padding:18px 22px;margin-top:14px">
+        <h3 style="font-size:15px;margin:0 0 4px">纠错 <span class="muted" style="font-size:12.5px;font-weight:400">审核通过获积分 +5 与成长值</span></h3>
+        <div class="fb-types" id="fbTypes">
+          <span class="chip on">内容错误</span><span class="chip">答案错误</span><span class="chip">解析错误</span><span class="chip">图形缺失</span><span class="chip">其他</span>
+        </div>
+        <input id="fbDesc" placeholder="错误描述（5~500 字）：请具体指出错误位置与正确内容" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:14px">
+        <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="submitFeedback()">提交纠错</button>
+      </div>
+
+      <div id="aiBox"></div>
+    </div>
+
+    <aside>
+      <div class="card" style="padding:16px 18px;margin-bottom:14px">
+        <h3 style="font-size:15px;margin:0 0 6px">相似题</h3>
+        <div id="simList"><p class="muted" style="font-size:12.5px">—</p></div>
+      </div>
+      <div class="card" style="padding:16px 18px">
+        <h3 style="font-size:15px;margin:0 0 6px">🤖 AI 助手</h3>
+        <p class="muted" style="font-size:12.5px;margin:0 0 8px">对本题出变式题，保持考点/题型/难度</p>
+        <button class="btn btn-primary btn-sm" style="width:100%" onclick="aiVariants()">🤖 AI 变式出题</button>
+        <div id="aiVariant"></div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:20px"><p><b>智卷云</b> · 题目详情（独立 URL：timu.html?id=N，五段式解析复刻菁优并超越）</p></footer>
+
+<script src="assets/katex-loader.js"></script>
+<script>
+const API = location.protocol.startsWith('http') ? '/api/v1' : 'http://localhost:3000/api/v1';
+const TOKEN = localStorage.getItem('zj_token') || '';
+const AUTH = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+let Q = null, FAV = false;
+
+function toast(m){const t=document.getElementById('toast');t.textContent=(m.startsWith('⚠')?'':'✅ ')+m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+function renderMath(scope){ if (typeof window.renderMathInElement === 'function') { try { window.renderMathInElement(scope||document.body,{delimiters:[{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}]}); } catch(_){} } }
+const stars = d => '★'.repeat(d) + '☆'.repeat(5 - d);
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', ...AUTH, ...(opts.headers || {}) }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({ code: 50010, message: '响应异常' }));
+  if (j.code !== 0) { const e = new Error(j.message); e.code = j.code; e.data = j.data; throw e; }
+  return j.data;
+}
+async function loadFavState() {
+  if (!TOKEN || !Q) return;
+  try {
+    const d = await api('/papers/favorites?pageNo=1&pageSize=50');
+    FAV = d.rows.some(x => x.id === Q.id);
+    document.getElementById('favBtn').textContent = FAV ? '★ 已收藏' : '☆ 收藏';
+  } catch (_) {}
+}
+
+async function boot() {
+  if (TOKEN) { try { const me = await api('/member/me'); document.getElementById('userBox').textContent = me.member.active ? '👑 会员用户' : '👤 已登录'; } catch (_) {} }
+  const id = Number(new URLSearchParams(location.search).get('id'));
+  if (!id) { document.getElementById('gate').style.display = ''; return; }
+  let q;
+  try { q = await api('/questions/' + id); } catch (e) {
+    document.getElementById('gate').style.display = '';
+    document.getElementById('gateTitle').textContent = '题目不存在或已下架';
+    return;
+  }
+  Q = q;
+  document.title = '题目详情 #' + q.id + ' - 智卷云';
+  document.getElementById('main').style.display = '';
+  document.getElementById('qHead').innerHTML =
+    `<span class="tag">${q.type}</span><span>难度 ${stars(q.difficulty)}（系数 ${typeof q.coefficient === 'number' ? q.coefficient.toFixed(2) : q.coefficient}）</span>` +
+    `<span>使用 ${q.use_count} 次</span><span>组卷 ${q.paper_uses ?? 0} 次</span>` +
+    (q.source ? `<span>${q.source}</span>` : '') +
+    (q.kp_names ? q.kp_names.split(/[,，]/).filter(Boolean).map(k => `<span class="chip" style="font-size:11px;padding:1px 8px">${k}</span>`).join('') : '');
+  document.getElementById('qStem').innerHTML = q.stem;
+  document.getElementById('qOpts').innerHTML = q.options ? q.options.map(o => `<div><b>${o.l}.</b> ${o.v}</div>`).join('') : '';
+  document.getElementById('secAnswer').textContent = q.answer;
+  document.getElementById('secBrief').textContent = q.analysis?.brief || '—';
+  document.getElementById('secSolve').textContent = q.analysis?.solve || '—';
+  document.getElementById('secComment').textContent = q.analysis?.comment || '—';
+  document.getElementById('simList').innerHTML = (q.similar || []).map(s =>
+    `<div class="sim" onclick="location.href='timu.html?id=${s.id}'"><div>${s.stem.length > 46 ? s.stem.slice(0, 46) + '…' : s.stem}</div>
+     <div class="m">${s.type} · 难度 ${s.difficulty}</div></div>`).join('') || '<p class="muted" style="font-size:12.5px">暂无相似题</p>';
+  loadFavState();
+  renderMath(document.getElementById('main'));
+}
+
+function toggleFav() {
+  if (!TOKEN) { toast('⚠ 请先到「会员」页登录'); return; }
+  api('/papers/favorites', { method: 'POST', body: { questionId: Q.id } })
+    .then(d => { FAV = d.favorited; document.getElementById('favBtn').textContent = FAV ? '★ 已收藏' : '☆ 收藏'; toast(FAV ? '★ 已收藏' : '已取消收藏'); })
+    .catch(e => toast('⚠ ' + e.message));
+}
+function addBasket() {
+  if (!TOKEN) { toast('⚠ 请先到「会员」页登录'); return; }
+  api('/basket', { method: 'POST', body: { questionIds: [Q.id] } })
+    .then(d => toast(d.added > 0 ? '已加入试题篮' : '已在试题篮中'))
+    .catch(e => toast('⚠ ' + e.message));
+}
+async function aiExplain() {
+  if (!TOKEN) { toast('⚠ 请先登录后使用 AI'); return; }
+  document.getElementById('aiBox').innerHTML = '<div class="ai-steps">AI 讲题生成中…</div>';
+  try {
+    const d = await api('/ai/explain', { method: 'POST', body: { questionId: Q.id } });
+    document.getElementById('aiBox').innerHTML = `<div class="card" style="padding:18px 22px;margin-top:14px"><h3 style="font-size:15px;margin:0 0 8px">🎓 AI 分步讲题</h3><div class="ai-steps">${d.steps}</div>${d.degraded ? '<p class="muted" style="font-size:12px;margin:6px 0 0">AI 服务降级为演示通道</p>' : ''}</div>`;
+  } catch (e) {
+    document.getElementById('aiBox').innerHTML = '';
+    if (e.code === 42900) toast('⚠ 今日 AI 配额已用完，开通会员升至 50 次/日'); else toast('⚠ ' + e.message);
+  }
+}
+async function aiVariants() {
+  if (!TOKEN) { toast('⚠ 请先登录后使用 AI'); return; }
+  document.getElementById('aiVariant').innerHTML = '<p class="muted" style="font-size:12.5px">生成中…</p>';
+  try {
+    const d = await api('/ai/variants', { method: 'POST', body: { questionId: Q.id } });
+    document.getElementById('aiVariant').innerHTML = `<div class="ai-steps" style="margin-top:10px;font-size:13px">${d.draft.stem}</div><p class="muted" style="font-size:11.5px;margin-top:6px">aigc=1 草稿，人工审核通过后入库</p>`;
+  } catch (e) {
+    document.getElementById('aiVariant').innerHTML = '';
+    if (e.code === 42900) toast('⚠ 今日 AI 配额已用完'); else toast('⚠ ' + e.message);
+  }
+}
+document.querySelectorAll('#fbTypes .chip').forEach(c => c.onclick = () => {
+  document.querySelectorAll('#fbTypes .chip').forEach(x => x.classList.remove('on'));
+  c.classList.add('on');
+});
+async function submitFeedback() {
+  const desc = document.getElementById('fbDesc').value.trim();
+  if (desc.length < 5) { toast('⚠ 请具体描述错误（至少 5 字）'); return; }
+  if (!TOKEN) { toast('⚠ 请先到「会员」页登录'); return; }
+  const type = document.querySelector('#fbTypes .chip.on').textContent.trim();
+  try {
+    const d = await api('/questions/' + Q.id + '/feedback', { method: 'POST', body: { type, content: desc } });
+    toast('✅ 纠错已提交（工单 #' + d.id + '），采纳后将获得 5 点奖励');
+    document.getElementById('fbDesc').value = '';
+  } catch (e) {
+    if (e.code === 42900) toast('⚠ 该题已有待处理的纠错反馈');
+    else toast('⚠ ' + e.message);
+  }
+}
+
+boot();
+</script>
+</body>
+</html>

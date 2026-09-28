@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>会员中心 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .me-bar { display:flex; gap:18px; align-items:center; flex-wrap:wrap; background:#fff; border-radius:14px; padding:14px 20px; box-shadow:var(--shadow); margin-bottom:22px; }
+  .me-bar b { color:var(--primary); }
+  .chip { background:#eef2ff; color:var(--primary); border-radius:999px; padding:4px 12px; font-size:13px; font-weight:600; }
+  .chip.gold { background:linear-gradient(120deg,#fef3c7,#fde68a); color:#92400e; }
+  .section-gap { margin-top:30px; }
+  .pkg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
+  .pkg { background:#fff; border-radius:14px; padding:18px; box-shadow:var(--shadow); }
+  .pkg .pt { font-size:18px; font-weight:800; color:#92400e; }
+  .coupon-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+  .coupon { display:flex; background:#fff; border-radius:14px; overflow:hidden; box-shadow:var(--shadow); position:relative; }
+  .coupon .left { width:104px; background:linear-gradient(135deg,#b8860b,#d4a017); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:14px 6px; }
+  .coupon .left.discount { background:linear-gradient(135deg,#2563eb,#3b82f6); }
+  .coupon .left.points { background:linear-gradient(135deg,#059669,#10b981); }
+  .coupon .left b { font-size:20px; }
+  .coupon .right { flex:1; padding:14px 16px; }
+  .coupon .right h4 { margin:0 0 6px; font-size:15px; }
+  .coupon .right p { margin:0; font-size:12.5px; color:var(--text-3); }
+  .coupon .badge { position:absolute; top:8px; right:10px; font-size:11px; padding:2px 8px; border-radius:999px; background:#f1f5f9; color:var(--text-3); }
+  .coupon.dim { opacity:.55; }
+  .tabs { display:flex; gap:8px; margin-bottom:14px; }
+  .tabs button { border:1px solid var(--line); background:#fff; border-radius:999px; padding:7px 16px; cursor:pointer; font-size:13.5px; }
+  .tabs button.on { background:var(--primary); color:#fff; border-color:var(--primary); }
+  table.mini { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:var(--shadow); font-size:13.5px; }
+  table.mini th, table.mini td { padding:9px 12px; border-bottom:1px solid var(--line); text-align:left; }
+  table.mini th { background:#f8fafc; color:var(--text-2); font-size:12.5px; }
+  .cal { display:flex; gap:6px; flex-wrap:wrap; }
+  .cal span { width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:#f1f5f9; font-size:12px; }
+  .cal span.hit { background:var(--primary); color:#fff; }
+  .modal-mask { display:none; position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:50; align-items:center; justify-content:center; }
+  .modal-mask.on { display:flex; }
+  .modal { width:420px; max-width:92vw; background:#fff; border-radius:16px; padding:24px; }
+  .modal h3 { margin:0 0 12px; }
+  .row { display:flex; justify-content:space-between; font-size:14px; padding:6px 0; }
+  .row.total { font-size:17px; font-weight:800; color:#b8860b; border-top:1px dashed var(--line); margin-top:6px; padding-top:12px; }
+  select, input.inp { width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 12px; font-size:14px; margin:6px 0; box-sizing:border-box; }
+  .login-card { max-width:420px; margin:30px auto; background:#fff; border-radius:16px; padding:26px; box-shadow:var(--shadow-lg); }
+  .muted { color:var(--text-3); font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a><a href="xuanti.html">章节选题</a><a href="zhineng.html">智能组卷</a>
+    <a href="mine.html">个人题库</a><a class="active" href="vip.html">会员</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-primary" href="zujuan.html">试题篮</a>
+</nav>
+
+<!-- 登录/注册门 -->
+<section class="section" id="authView" style="display:none">
+  <div class="login-card">
+    <h2 style="margin-top:0">登录智卷云 · 会员中心</h2>
+    <p class="muted">演示环境：已有测试账号 13800000001 / Teacher@123（注册即享 7 日会员体验 + 10 点 + 新人券）</p>
+    <input class="inp" id="lgMobile" placeholder="手机号" value="13800000001">
+    <input class="inp" id="lgPass" type="password" placeholder="密码" value="Teacher@123">
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">登录</button>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <input class="inp" id="regMobile" placeholder="注册手机号（新用户）" style="margin:0">
+      <input class="inp" id="regInvite" placeholder="邀请码(选填)" style="margin:0;max-width:130px">
+    </div>
+    <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="doRegister()">一键注册新账号（含新人礼包）</button>
+  </div>
+</section>
+
+<!-- 主界面 -->
+<section class="section" id="mainView" style="display:none;padding-top:26px">
+  <div class="me-bar" id="meBar"></div>
+
+  <div class="section-head"><h2>会员特权 · 对标组卷网，免费更诚意</h2>
+    <p>浏览、选题、公式与图形渲染全部免费；只有"下载"才需要额度或会员</p></div>
+  <div class="vip-tiers" id="planGrid"></div>
+
+  <div class="section-gap">
+    <div class="section-head"><h2>点数充值 · 100 点 = 1 元</h2>
+      <p>下载计费：1-10 题 100 点 / 11-20 题 200 点 / 21-50 题 400 点 / 51-100 题 600 点（比组卷网便宜 50%）；30 天内重复下载不重复计费</p></div>
+    <div class="pkg-grid" id="pkgGrid"></div>
+  </div>
+
+  <div class="section-gap">
+    <div class="section-head"><h2>优惠券中心</h2><p>限量领取，下单自动抵扣；关单/退款未过期自动返还</p></div>
+    <div class="tabs">
+      <button class="on" data-cp="avail" onclick="switchCp(this)">可领取</button>
+      <button data-cp="mine" onclick="switchCp(this)">我的优惠券</button>
+    </div>
+    <div class="coupon-list" id="couponArea"></div>
+  </div>
+
+  <div class="section-gap">
+    <div class="section-head"><h2>我的订单</h2><p>待支付订单 30 分钟内有效，可主动关闭（关闭后锁定的优惠券自动返还）</p></div>
+    <table class="mini"><thead><tr><th>订单号</th><th>商品</th><th>原价</th><th>实付</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="orderList"></tbody></table>
+  </div>
+
+  <div class="section-gap" style="display:grid;grid-template-columns:1fr 1.4fr;gap:20px">
+    <div>
+      <div class="section-head"><h2>每日签到</h2><p>基础 1 点 ×会员双倍；连续 3/7/15/30 天有档位奖励</p></div>
+      <div class="pkg" style="text-align:center">
+        <div id="signInfo" class="muted" style="margin-bottom:10px">加载中…</div>
+        <div class="cal" id="calGrid" style="justify-content:center;margin-bottom:14px"></div>
+        <button class="btn btn-grad" style="width:100%" onclick="doSign()">今日签到</button>
+      </div>
+      <div class="pkg" style="margin-top:14px">
+        <h3 style="margin:0 0 8px">邀请有礼 · 双方各得 20 点</h3>
+        <div id="inviteBox" class="muted">加载中…</div>
+      </div>
+    </div>
+    <div>
+      <div class="section-head"><h2>点数明细</h2><p>充值/赠送/扣费/签到/邀请/退款，双值流水可对账</p></div>
+      <table class="mini"><thead><tr><th>类型</th><th>变动</th><th>余额</th><th>说明</th><th>时间</th></tr></thead><tbody id="ptLog"></tbody></table>
+    </div>
+  </div>
+
+  <div class="compare-strip section-gap">
+    <div><h3>📐 结构化题库</h3><p>公式 LaTeX 可检索可编辑、图形白底统一 300dpi —— 组卷网连公式都是图片。</p></div>
+    <div><h3>🤖 AI 原生</h3><p>AI 组卷、变式出题、解析审校、分步讲题；AI 生成全部人工审核 + SymPy 验算。</p></div>
+    <div><h3>🖨️ 下载即所得</h3><p>默认排版即专业试卷：A4/A3 双栏、答案分离、答题卡，不逼用户装破解脚本。</p></div>
+  </div>
+</section>
+
+<!-- 收银台 -->
+<div class="modal-mask" id="payMask">
+  <div class="modal">
+    <h3 id="payTitle">确认订单</h3>
+    <div class="row"><span>商品</span><b id="payGoods"></b></div>
+    <div class="row"><span>原价</span><span id="payOrigin"></span></div>
+    <div class="row"><span>优惠券</span><span style="max-width:220px"><select id="payCoupon" onchange="refreshPay()"></select></span></div>
+    <div class="row"><span>券抵扣</span><span id="payDiscount">-¥0.00</span></div>
+    <div class="row total"><span>实付</span><span id="payTotal"></span></div>
+    <p class="muted" id="payErr" style="color:#dc2626"></p>
+    <div style="display:flex;gap:10px;margin-top:10px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closePay()">取消</button>
+      <button class="btn btn-primary" style="flex:2" id="payBtn" onclick="submitPay()">模拟支付（沙箱 MOCK）</button>
+    </div>
+    <p class="muted" style="margin-top:8px">订单 30 分钟内有效，超时自动关单；支付成功后可在「我的订单」中查看。</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<footer class="footer"><p><b>智卷云</b> · 会员中心（对接真实交易 API：/member /coupons /payments /trade，详见 docs/17）</p></footer>
+
+<script>
+const API = '/api/v1';
+let token = localStorage.getItem('zj_token') || '';
+let PROFILE = null, PLANS = null, ENT = null;
+let payCtx = null; // {skuType, planCode|packageId, originCents, title}
+let cpTab = 'avail';
+const yuan = c => '¥' + (c / 100).toFixed(2);
+
+function toast(m){const t=document.getElementById('toast');t.textContent=(m.startsWith('❌')?'':'✅ ')+m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(opts.headers || {}) }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  let j; try { j = await r.json(); } catch (_) { j = { code: 50010, message: '响应异常' }; }
+  if (j.code !== 0) { const e = new Error(j.message || '请求失败'); e.code = j.code; e.data = j.data; e.status = r.status; throw e; }
+  return j.data;
+}
+
+async function boot() {
+  if (!token) { document.getElementById('authView').style.display = ''; return; }
+  document.getElementById('authView').style.display = 'none';
+  document.getElementById('mainView').style.display = '';
+  try { await Promise.all([loadMe(), loadPlans(), loadCoupons(), loadPoints(), loadSign(), loadInvite(), loadOrders()]); }
+  catch (e) { if (e.code === 40100) { token = ''; localStorage.removeItem('zj_token'); boot(); } else toast('❌ ' + e.message); }
+}
+
+// —— 我的订单 ——
+const O_STS = { CREATED: '⏳ 待支付', PAID: '✅ 已支付', CLOSED: '⏹ 已关闭', REFUNDED: '↩ 已退款' };
+async function loadOrders() {
+  try {
+    const d = await api('/member/orders?pageNo=1&pageSize=10');
+    document.getElementById('orderList').innerHTML = d.rows.map(o => `<tr>
+      <td style="font-family:monospace">${o.orderNo}</td><td>${o.title}</td>
+      <td>${yuan(o.originCents)}</td><td><b>${yuan(o.payCents)}</b>${o.discountCents ? `<span class="muted">（券抵${yuan(o.discountCents)}）</span>` : ''}</td>
+      <td>${O_STS[o.status] || o.status}</td><td>${o.createdAt}</td>
+      <td>${o.status === 'CREATED' ? `<button class="btn btn-ghost btn-sm" onclick="closeOrder('${o.orderNo}')">关闭订单</button>` : ''}</td></tr>`).join('')
+      || '<tr><td colspan="7" class="muted" style="text-align:center">暂无订单</td></tr>';
+  } catch (_) { /* 未登录由 boot 处理 */ }
+}
+async function closeOrder(no) {
+  try { await api('/member/orders/' + no + '/close', { method: 'POST' }); toast('订单已关闭，锁定优惠券已返还'); loadOrders(); loadCoupons(); loadMe(); }
+  catch (e) { toast('❌ ' + e.message); }
+}
+
+async function doLogin() {
+  try {
+    const d = await api('/auth/login', { method: 'POST', body: { mobile: lgMobile.value.trim(), password: lgPass.value } });
+    token = d.accessToken; localStorage.setItem('zj_token', token); PROFILE = d.profile;
+    toast('欢迎回来，' + d.profile.nickname); boot();
+  } catch (e) { toast('❌ ' + e.message); }
+}
+async function doRegister() {
+  try {
+    const body = { mobile: regMobile.value.trim(), password: 'Passw0rd123', role: 'TEACHER', nickname: '老师' + regMobile.value.slice(-4) };
+    if (regInvite.value.trim()) body.inviteCode = regInvite.value.trim();
+    const d = await api('/auth/register', { method: 'POST', body });
+    token = d.accessToken; localStorage.setItem('zj_token', token); PROFILE = d.profile;
+    toast('注册成功：7 日会员 + 10 点已到账'); boot();
+  } catch (e) { toast('❌ ' + e.message); }
+}
+
+async function loadMe() {
+  ENT = await api('/member/me');
+  const m = ENT.member;
+  document.getElementById('meBar').innerHTML = `
+    <span class="logo" style="pointer-events:none"><span class="mark">智</span></span>
+    <b>${m.active ? `<span class="chip gold">👑 ${m.planCode} · 剩 ${m.remainDays} 天</span>` : '<span class="chip">普通用户</span>'}</b>
+    <span>点数余额 <b>${ENT.points.balance}</b></span>
+    <span>今日免费下载 <b>${ENT.points.freeUsedToday}/${ENT.points.freeDownloadsPerDay}</b></span>
+    <span>未用优惠券 <b>${ENT.coupons.unused}</b> 张</span>
+    <a class="btn btn-ghost btn-sm" onclick="logout()" style="margin-left:auto">退出登录</a>`;
+}
+function logout() { token = ''; localStorage.removeItem('zj_token'); boot(); }
+
+async function loadPlans() {
+  PLANS = await api('/member/plans');
+  const style = { TEACHER_PRO: 'hot', SINGLE: '', STUDENT: '' };
+  document.getElementById('planGrid').innerHTML = PLANS.plans.filter(p => p.purchasable).map(p => `
+    <div class="vip-tier ${style[p.code] || ''}">
+      <h3>${p.name}</h3>
+      <div class="price">${yuan(p.priceCents)}<i>/${p.durationDays} 天</i></div>
+      <ul>${(p.benefits || []).map(b => `<li>${b}</li>`).join('')}</ul>
+      <button class="btn ${p.code === 'TEACHER_PRO' ? 'btn-grad' : 'btn-primary'}" style="width:100%"
+        onclick="openPay({skuType:'MEMBER', planCode:'${p.code}', originCents:${p.priceCents}, title:'${p.name} · ${p.durationDays}天'})">立即开通</button>
+    </div>`).join('');
+  document.getElementById('pkgGrid').innerHTML = PLANS.pointPackages.map(k => `
+    <div class="pkg"><div style="font-size:13px;color:var(--text-3)">${k.label}</div>
+      <div class="pt">${k.points} 点</div>
+      ${k.bonusPoints ? `<div class="muted">含赠送 ${k.bonusPoints} 点</div>` : ''}
+      <button class="btn btn-primary" style="width:100%;margin-top:10px"
+        onclick="openPay({skuType:'POINTS', packageId:${k.id}, originCents:${k.priceCents}, title:'点数充值 ${k.points} 点'})">${yuan(k.priceCents)} 充值</button>
+    </div>`).join('');
+}
+
+// —— 收银台 ——
+async function openPay(ctx) {
+  payCtx = ctx;
+  document.getElementById('payGoods').textContent = ctx.title;
+  document.getElementById('payOrigin').textContent = yuan(ctx.originCents);
+  document.getElementById('payErr').textContent = '';
+  let options = '<option value="">不使用优惠券</option>';
+  try {
+    const d = await api(`/coupons/usable?skuType=${ctx.skuType}&originCents=${ctx.originCents}`);
+    for (const c of d.list.filter(x => x.usable)) options += `<option value="${c.id}" data-d="${c.discountCents}">${c.name}（抵 ${yuan(c.discountCents)}）</option>`;
+    const blocked = d.list.filter(x => !x.usable);
+    if (blocked.length) options += `<option disabled>${blocked.length} 张券不可用（门槛/范围不符）</option>`;
+  } catch (_) { /* 未登录等场景忽略 */ }
+  document.getElementById('payCoupon').innerHTML = options;
+  refreshPay();
+  document.getElementById('payMask').classList.add('on');
+}
+function refreshPay() {
+  const sel = document.getElementById('payCoupon');
+  const opt = sel.selectedOptions[0];
+  const discount = opt && opt.value ? Number(opt.dataset.d) : 0;
+  document.getElementById('payDiscount').textContent = '-' + yuan(discount);
+  document.getElementById('payTotal').textContent = yuan(Math.max(0, payCtx.originCents - discount));
+}
+function closePay() { document.getElementById('payMask').classList.remove('on'); }
+async function submitPay() {
+  const btn = document.getElementById('payBtn'); btn.disabled = true;
+  try {
+    const order = await api('/member/orders', { method: 'POST', headers: { 'X-Idempotency-Key': crypto.randomUUID() },
+      body: { skuType: payCtx.skuType, planCode: payCtx.planCode, packageId: payCtx.packageId,
+              couponId: document.getElementById('payCoupon').value ? Number(document.getElementById('payCoupon').value) : null,
+              channel: 'MOCK' } });
+    await api('/payments/mock-notify', { method: 'POST', body: { orderNo: order.order.orderNo,
+      callbackId: 'cb-' + crypto.randomUUID(), amountCents: order.order.payCents } });
+    closePay(); toast('支付成功：' + order.order.title);
+    loadMe(); loadPoints(); loadCoupons(); loadOrders();
+  } catch (e) {
+    document.getElementById('payErr').textContent = (e.code === 42200 && e.data && e.data.needCents) ? `未达券门槛（需满 ${yuan(e.data.needCents)}）` : e.message;
+  } finally { btn.disabled = false; }
+}
+
+// —— 优惠券中心 ——
+function switchCp(btn) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on'); cpTab = btn.dataset.cp; loadCoupons();
+}
+async function loadCoupons() {
+  const box = document.getElementById('couponArea');
+  if (cpTab === 'avail') {
+    try {
+      const d = await api('/coupons/available');
+      box.innerHTML = d.list.map(t => {
+        const label = t.type === 'FULL_REDUCTION' ? `<b>${yuan(t.amountCents)}</b><span class="muted" style="color:#fff"> 满${yuan(t.thresholdCents)}可用</span>`
+          : t.type === 'DISCOUNT' ? `<b>${(t.discountRate / 10).toFixed(1)}折</b><span class="muted" style="color:#fff"> 封顶${yuan(t.maxDiscountCents)}</span>`
+          : `<b>${t.amountCents}点</b>`;
+        return `<div class="coupon ${t.claimState !== 'CLAIMABLE' ? 'dim' : ''}">
+          <div class="left ${t.type === 'FULL_REDUCTION' ? '' : t.type === 'DISCOUNT' ? 'discount' : 'points'}">${label}</div>
+          <div class="right"><h4>${t.name}</h4>
+            <p>限量 ${t.total || '不限'} · 已领 ${t.claimed} · 每人 ${t.perLimit || '不限'} 张</p>
+            <p>${t.validDays ? `领后 ${t.validDays} 天内有效` : '固定有效期'} · 范围：${t.scope === 'ALL' ? '全部商品' : t.scope}</p>
+            <button class="btn btn-primary btn-sm" ${t.claimState !== 'CLAIMABLE' ? 'disabled' : ''} onclick="claim(${t.id})">
+              ${({ CLAIMABLE: '立即领取', SOLD_OUT: '已领完', LIMIT_REACHED: '已达限领', NOT_STARTED: '未开始', ENDED: '已结束' })[t.claimState]}</button>
+          </div></div>`;
+      }).join('') || '<p class="muted">暂无可领优惠券</p>';
+    } catch (e) { box.innerHTML = '<p class="muted">登录后查看优惠券</p>'; }
+  } else {
+    const d = await api('/coupons/mine?status=ALL');
+    box.innerHTML = d.list.map(c => `<div class="coupon ${c.status !== 'UNUSED' ? 'dim' : ''}">
+      <div class="left ${c.type === 'FULL_REDUCTION' ? '' : c.type === 'DISCOUNT' ? 'discount' : 'points'}">
+        ${c.type === 'FULL_REDUCTION' ? `<b>${yuan(c.amountCents)}</b>` : c.type === 'DISCOUNT' ? `<b>${(c.discountRate / 10).toFixed(1)}折</b>` : `<b>${c.amountCents}点</b>`}</div>
+      <div class="right"><h4>${c.name}</h4><p>门槛 ${yuan(c.thresholdCents)} · 有效期至 ${c.expireAt}</p>
+        <span class="badge">${({ UNUSED: '未使用', FROZEN: '锁定中', USED: '已使用', EXPIRED: '已过期', CLOSED: '已作废' })[c.status]}</span></div></div>`).join('')
+      || '<p class="muted">还没有优惠券，去「可领取」看看</p>';
+  }
+}
+async function claim(id) {
+  try { const d = await api('/coupons/claim', { method: 'POST', body: { templateId: id } });
+    toast('领取成功，有效期至 ' + d.expireAt); loadCoupons(); loadMe();
+  } catch (e) { toast('❌ ' + (e.data && e.data.reason === 'COUPON_SOLD_OUT' ? '已被领完，手慢了' : e.message)); }
+}
+
+// —— 点数 / 签到 / 邀请 ——
+async function loadPoints() {
+  const d = await api('/trade/points?pageNo=1&pageSize=15');
+  document.getElementById('ptLog').innerHTML = d.rows.map(l => `<tr>
+    <td>${({ RECHARGE: '充值', RECHARGE_BONUS: '充值赠送', CONSUME: '下载扣费', REFUND: '退款', GIFT_NEWBIE: '新人礼包', GIFT_INVITE: '邀请奖励', SIGN: '签到', ADMIN_ADJUST: '人工调整' })[l.biz_type] || l.biz_type}</td>
+    <td style="color:${l.delta >= 0 ? '#059669' : '#dc2626'};font-weight:700">${l.delta >= 0 ? '+' : ''}${l.delta}</td>
+    <td>${l.balance_after}</td><td>${l.note || '-'}</td><td>${l.created_at}</td></tr>`).join('')
+    || '<tr><td colspan="5" class="muted" style="text-align:center">暂无流水</td></tr>';
+}
+async function loadSign() {
+  const d = await api('/trade/signin');
+  document.getElementById('signInfo').textContent = `已连续签到 ${d.continuous} 天${d.signedToday ? ' · 今日已签' : ''}`;
+  const days = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+  const hit = new Set(d.calendar);
+  document.getElementById('calGrid').innerHTML = Array.from({ length: days }, (_, i) => {
+    const ds = `${dateStr().slice(0, 7)}-${String(i + 1).padStart(2, '0')}`;
+    return `<span class="${hit.has(ds) ? 'hit' : ''}">${i + 1}</span>`;
+  }).join('');
+}
+async function doSign() {
+  try { const d = await api('/trade/signin', { method: 'POST' });
+    toast(`签到成功 +${d.pointsGained} 点（连续 ${d.continuous} 天）`); loadSign(); loadPoints(); loadMe();
+  } catch (e) { toast(e.data && e.data.reason === 'ALREADY_SIGNED' ? '今日已签到，明天再来' : '❌ ' + e.message); }
+}
+async function loadInvite() {
+  const d = await api('/trade/invite');
+  document.getElementById('inviteBox').innerHTML = `
+    <div style="font-size:20px;font-weight:800;letter-spacing:2px;color:var(--primary);margin:6px 0">${d.inviteCode}
+      <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${d.inviteCode}').then(()=>toast('邀请码已复制'))">复制</button></div>
+    <p class="muted">已邀请 ${d.invited} 人 · 累计获得 ${d.pointsEarned} 点</p>
+    ${d.records.slice(0, 3).map(r => `<p class="muted">${r.mobileMasked} · +${r.points}点 · ${r.createdAt}</p>`).join('')}`;
+}
+function dateStr(d = new Date()) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+boot();
+</script>
+</body>
+</html>

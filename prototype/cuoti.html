@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>错题本与学情 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+<script defer src="assets/katex-loader.js"></script>
+<style>
+  .tabs { display:flex; gap:8px; margin:18px 0 14px; }
+  .tabs button { border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 18px; cursor:pointer; font-size:14px; }
+  .tabs button.on { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .wq { background:#fff; border-radius:14px; padding:14px 18px; box-shadow:var(--shadow); margin-bottom:10px; }
+  .wq-head { display:flex; gap:8px; align-items:center; font-size:12px; color:var(--text-3); margin-bottom:6px; }
+  .wq-head .cnt { background:#fee2e2; color:#dc2626; border-radius:999px; padding:1px 9px; font-weight:700; }
+  .wq-stem { font-size:13.5px; line-height:1.6; color:var(--text-2); overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .kp-bar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .kp-bar .name { width:180px; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .kp-bar .track { flex:1; height:14px; background:#f1f5f9; border-radius:999px; overflow:hidden; }
+  .kp-bar .fill { height:100%; border-radius:999px; }
+  .ans-area { width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:14px; margin:6px 0; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a><a href="xuanti.html">章节选题</a><a href="zhineng.html">智能组卷</a>
+    <a href="mine.html">个人题库</a><a class="active" href="cuoti.html">错题本</a><a href="vip.html">会员</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="vip.html" id="userBox">登录 / 注册</a>
+  <a class="btn btn-primary" href="zhineng.html">去组卷</a>
+</nav>
+
+<section class="section" style="padding-top:14px;max-width:980px">
+  <div class="section-head" style="margin-bottom:0">
+    <h2>错题本与学情</h2>
+    <p>答错自动归档 · 再练答对自动销号 · 知识点正确率定位薄弱点（对标菁优错题本，超越：归因+再练一键完成）</p>
+  </div>
+
+  <div id="gate" class="card" style="padding:30px;text-align:center;display:none">
+    <h3 style="margin-top:0">请先登录</h3><a class="btn btn-primary" href="vip.html">去登录 / 注册</a>
+  </div>
+
+  <div id="main">
+    <div class="tabs">
+      <button class="on" data-t="wrong" onclick="switchTab('wrong')">📕 错题本</button>
+      <button data-t="report" onclick="switchTab('report')">📊 学情报告</button>
+    </div>
+
+    <div id="pane-wrong">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span class="muted" style="font-size:13px">未解决错题：<b id="wqCount" style="color:var(--primary)">0</b> 道</span>
+        <button class="btn btn-grad btn-sm" onclick="genRepeat()">🔁 一键再练卷（按错题知识点出题）</button>
+      </div>
+      <div id="wqList"><p class="muted">加载中…</p></div>
+
+      <!-- 再练卷作答区 -->
+      <div id="repeatBox" style="display:none;margin-top:18px">
+        <div class="card" style="padding:18px 22px">
+          <h3 style="margin:0 0 10px;font-size:16px">🔁 再练卷 <span class="muted" style="font-size:12.5px" id="rpMeta"></span></h3>
+          <div id="rpList"></div>
+          <button class="btn btn-primary" style="margin-top:10px" onclick="submitRepeat()">提交判分</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pane-report" style="display:none">
+      <div class="card" style="padding:20px 24px">
+        <h3 style="margin:0 0 14px;font-size:16px">知识点正确率（练习与再练聚合）</h3>
+        <div id="kpList"><p class="muted">暂无练习数据：先在「错题本」或练习中作答</p></div>
+        <div id="weakTop" style="margin-top:16px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:20px"><p><b>智卷云</b> · 错题本与学情（接口：/wrong-questions、/practices?mode=REPEAT、/report/kp，docs/17 §7B）</p></footer>
+
+<script src="assets/katex-loader.js"></script>
+<script>
+const API = location.protocol.startsWith('http') ? '/api/v1' : 'http://localhost:3000/api/v1';
+const TOKEN = localStorage.getItem('zj_token') || '';
+const AUTH = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+let REPEAT = null;
+
+function toast(m){const t=document.getElementById('toast');t.textContent=(m.startsWith('⚠')?'':'✅ ')+m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+function renderMath(scope){ if (typeof window.renderMathInElement === 'function') { try { window.renderMathInElement(scope||document.body,{delimiters:[{left:'\\(',right:'\\)',display:false}]}); } catch(_){} } }
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', ...AUTH, ...(opts.headers || {}) }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({ code: 50010, message: '响应异常' }));
+  if (j.code !== 0) { const e = new Error(j.message); e.code = j.code; e.data = j.data; throw e; }
+  return j.data;
+}
+function switchTab(t) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  document.getElementById('pane-wrong').style.display = t === 'wrong' ? '' : 'none';
+  document.getElementById('pane-report').style.display = t === 'report' ? '' : 'none';
+  if (t === 'report') loadReport(); else loadWrong();
+}
+
+async function boot() {
+  if (!TOKEN) { document.getElementById('gate').style.display = ''; return; }
+  loadWrong();
+}
+function barColor(rate) { return rate >= 0.8 ? '#059669' : rate >= 0.6 ? '#f59e0b' : '#dc2626'; }
+
+async function loadWrong() {
+  const box = document.getElementById('wqList');
+  box.innerHTML = '<p class="muted">加载中…</p>';
+  try {
+    const d = await api('/wrong-questions');
+    document.getElementById('wqCount').textContent = d.list.length;
+    box.innerHTML = d.list.map(w => `<div class="wq">
+      <div class="wq-head"><span class="cnt">错 ${w.wrong_count} 次</span><span class="tag chip" style="font-size:11px;padding:1px 8px">${w.type}</span>
+        <span>难度 ${w.difficulty}</span>${w.kp_names ? `<span>${w.kp_names}</span>` : ''}<span>最近错误 ${w.last_wrong_at}</span>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="resolveWq(${w.id})">✅ 已掌握</button></div>
+      <div class="wq-stem">${w.stem}</div></div>`).join('')
+      || '<p class="muted">太棒了，暂无未解决错题！做完练习答错的题会自动出现在这里。</p>';
+    renderMath(box);
+  } catch (e) { box.innerHTML = '<p class="muted">加载失败：' + e.message + '</p>'; }
+}
+async function resolveWq(id) {
+  try { await api('/wrong-questions/' + id + '/resolve', { method: 'POST' }); toast('已标记掌握'); loadWrong(); }
+  catch (e) { toast('⚠ ' + e.message); }
+}
+
+async function genRepeat() {
+  try {
+    const d = await api('/practices', { method: 'POST', body: { mode: 'REPEAT', count: 5 } });
+    REPEAT = d;
+    document.getElementById('repeatBox').style.display = '';
+    document.getElementById('rpMeta').textContent = `共 ${d.total} 题（按错题知识点新抽，已排除原错题）`;
+    document.getElementById('rpList').innerHTML = d.questions.map((q, i) => `
+      <div class="gen-q" style="background:#f8fafc;border-radius:12px;padding:12px 16px;margin-bottom:8px">
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:4px"><b>${i + 1}.</b> ${q.type} · 难度 ${q.difficulty}</div>
+        <div style="font-size:13.5px">${q.stem}</div>
+        ${q.options ? `<div style="margin-top:6px;font-size:13px;color:var(--text-2);display:grid;gap:2px">${q.options.map(o => `<div><b>${o.l}.</b> ${o.v}</div>`).join('')}</div>` : ''}
+        <input class="ans-area" placeholder="在此输入你的答案（客观题自动判分）" data-qid="${q.id}">
+      </div>`).join('');
+    renderMath(document.getElementById('rpList'));
+    document.getElementById('repeatBox').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) { toast('⚠ ' + e.message); }
+}
+async function submitRepeat() {
+  if (!REPEAT) return;
+  const answers = [...document.querySelectorAll('#rpList .ans-area')]
+    .map(inp => ({ questionId: Number(inp.dataset.qid), answer: inp.value.trim() }))
+    .filter(a => a.answer);
+  if (!answers.length) { toast('⚠ 请先作答'); return; }
+  try {
+    const d = await api('/practices/' + REPEAT.practiceId + '/submit', { method: 'POST', body: { answers } });
+    document.getElementById('rpList').innerHTML = d.results.map((r, i) => `
+      <div class="gen-q" style="background:#f8fafc;border-radius:12px;padding:12px 16px;margin-bottom:8px;border-left:4px solid ${r.correct === 1 ? '#059669' : r.correct === 0 ? '#dc2626' : '#94a3b8'}">
+        <div style="font-size:12px;margin-bottom:4px"><b>${i + 1}.</b>
+          ${r.correct === 1 ? '<span style="color:#059669;font-weight:700">✅ 正确</span>' : r.correct === 0 ? '<span style="color:#dc2626;font-weight:700">❌ 错误（已回错题本）</span>' : '<span class="muted">⏳ 待人工批改</span>'}
+          <span class="muted">你的答案：${r.yourAnswer || '—'} · 正确答案：${r.answer}</span></div>
+        ${r.analysis ? `<div style="font-size:12.5px;color:var(--text-2)">解析：${r.analysis.brief || ''} ${r.analysis.solve || ''}</div>` : ''}
+      </div>`).join('');
+    renderMath(document.getElementById('rpList'));
+    toast(`判分完成：正确率 ${d.correctRate === null ? '待批改' : Math.round(d.correctRate * 100) + '%'}`);
+    loadWrong();
+  } catch (e) { toast('⚠ ' + e.message); }
+}
+
+async function loadReport() {
+  const box = document.getElementById('kpList');
+  box.innerHTML = '<p class="muted">加载中…</p>';
+  try {
+    const d = await api('/report/kp');
+    box.innerHTML = d.list.map(r => `<div class="kp-bar">
+      <span class="name">${r.kp}</span>
+      <div class="track"><div class="fill" style="width:${Math.round((r.correctRate || 0) * 100)}%;background:${barColor(r.correctRate || 0)}"></div></div>
+      <span style="font-size:12px;width:110px;text-align:right">${Math.round((r.correctRate || 0) * 100)}%（${r.correct}/${r.answered}）</span></div>`).join('')
+      || '<p class="muted">暂无练习数据</p>';
+    const weak = d.list.filter(r => (r.correctRate || 0) < 0.6).slice(0, 3);
+    document.getElementById('weakTop').innerHTML = weak.length
+      ? `<div class="card" style="padding:14px 18px;background:#fff7ed;border:1px solid #fed7aa">
+          <b style="font-size:14px">🎯 薄弱点 Top${weak.length}</b>
+          <p style="font-size:13px;color:var(--text-2);margin:6px 0 0">${weak.map(w => w.kp + '（' + Math.round(w.correctRate * 100) + '%）').join('、')} —— 建议在「错题本」生成再练卷针对性巩固。</p></div>`
+      : '';
+  } catch (e) { box.innerHTML = '<p class="muted">加载失败：' + e.message + '</p>'; }
+}
+
+boot();
+</script>
+</body>
+</html>

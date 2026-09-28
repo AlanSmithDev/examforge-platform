@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>试卷选题 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+<script defer src="assets/katex-loader.js"></script>
+<style>
+  .cat-tabs { display:flex; gap:0; margin:18px 0 14px; border-bottom:2px solid var(--line); }
+  .cat-tabs button { border:none; background:none; padding:10px 22px; font-size:15px; cursor:pointer; color:var(--text-2); border-bottom:2px solid transparent; margin-bottom:-2px; }
+  .cat-tabs button.on { color:var(--primary); font-weight:700; border-bottom-color:var(--primary); }
+  .filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .filters select { border:1px solid var(--line); border-radius:9px; padding:7px 10px; font-size:13px; background:#fff; }
+  .paper-row { background:#fff; border-radius:14px; padding:16px 20px; box-shadow:var(--shadow); margin-bottom:12px; display:flex; gap:16px; align-items:center; }
+  .paper-info { flex:1; }
+  .paper-info h4 { margin:0 0 6px; font-size:15.5px; }
+  .paper-meta { display:flex; gap:10px; flex-wrap:wrap; font-size:12px; color:var(--text-3); }
+  .lv { border-radius:999px; padding:1px 10px; font-size:11.5px; font-weight:700; }
+  .lv.精品 { background:#fef3c7; color:#92400e; }
+  .lv.特供 { background:#fce7f3; color:#9d174d; }
+  .lv.普通 { background:#f1f5f9; color:var(--text-3); }
+  .paper-acts { display:flex; flex-direction:column; gap:6px; min-width:150px; }
+  .pager { display:flex; gap:6px; justify-content:center; margin:16px 0; }
+  .pager button { border:1px solid var(--line); background:#fff; border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px; }
+  .pager button.on { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .modal-mask { display:none; position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:50; align-items:center; justify-content:center; }
+  .modal-mask.on { display:flex; }
+  .modal { width:680px; max-width:94vw; max-height:86vh; overflow:auto; background:#fff; border-radius:16px; padding:24px; }
+  .pv-q { border:1px solid var(--line); border-radius:12px; padding:12px 16px; margin-bottom:10px; }
+  .pv-q .m { font-size:12px; color:var(--text-3); margin-bottom:4px; display:flex; gap:8px; }
+  .pv-q .stem { font-size:13.5px; line-height:1.7; }
+  .locked-note { background:#fffbeb; border:1px dashed #f59e0b; border-radius:10px; padding:10px 14px; font-size:13px; color:#92400e; margin:12px 0; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a><a href="xuanti.html">章节选题</a><a class="active" href="shijuan.html">试卷选题</a>
+    <a href="zhineng.html">智能组卷</a><a href="mine.html">个人题库</a><a href="vip.html">会员</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="vip.html" id="userBox">登录 / 注册</a>
+  <a class="btn btn-primary" href="zhineng.html">去组卷</a>
+</nav>
+
+<section class="section" style="padding-top:14px;max-width:1180px">
+  <div class="section-head" style="margin-bottom:0">
+    <h2>试卷选题 · 整卷库</h2>
+    <p>示范整卷免费试读 30%（只看题干）；整卷下载走统一计费（会员不限次）；试读题可「抽题重组」进试题篮</p>
+  </div>
+
+  <div class="cat-tabs" id="catTabs">
+    <button class="on" data-c="">全部</button>
+    <button data-c="同步教学">同步教学</button>
+    <button data-c="阶段测试">阶段测试</button>
+    <button data-c="高考备考">高考备考</button>
+    <button data-c="竞赛">竞赛</button>
+  </div>
+
+  <div class="filters">
+    <select id="fLevel"><option value="">全部级别</option><option>精品</option><option>特供</option><option>普通</option></select>
+    <select id="fYear"><option value="">全部年份</option><option value="2026">2026</option><option value="2025">2025</option></select>
+    <button class="btn btn-primary btn-sm" onclick="loadList(1)">筛选</button>
+  </div>
+
+  <div id="paperList"><p class="muted">加载中…</p></div>
+  <div class="pager" id="pager"></div>
+</section>
+
+<!-- 试读弹窗 -->
+<div class="modal-mask" id="pvMask">
+  <div class="modal" id="pvBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:20px"><p><b>智卷云</b> · 试卷选题（接口：GET /papers/public、/papers/public/{id}/preview，docs/17 §6.6）</p></footer>
+
+<script src="assets/katex-loader.js"></script>
+<script>
+const API = location.protocol.startsWith('http') ? '/api/v1' : 'http://localhost:3000/api/v1';
+const TOKEN = localStorage.getItem('zj_token') || '';
+const AUTH = TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {};
+let CATEGORY = '', PAGE = 1;
+
+function toast(m){const t=document.getElementById('toast');t.textContent=(m.startsWith('⚠')?'':'✅ ')+m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2800);}
+function renderMath(scope){ if (typeof window.renderMathInElement === 'function') { try { window.renderMathInElement(scope||document.body,{delimiters:[{left:'\\(',right:'\\)',display:false}]}); } catch(_){} } }
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json', ...AUTH, ...(opts.headers || {}) }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({ code: 50010, message: '响应异常' }));
+  if (j.code !== 0) { const e = new Error(j.message); e.code = j.code; e.data = j.data; throw e; }
+  return j.data;
+}
+
+document.querySelectorAll('#catTabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#catTabs button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); CATEGORY = b.dataset.c; loadList(1);
+});
+
+async function loadList(page) {
+  PAGE = page;
+  const p = new URLSearchParams({ pageNo: page, pageSize: 8 });
+  if (CATEGORY) p.set('category', CATEGORY);
+  if (document.getElementById('fLevel').value) p.set('level', document.getElementById('fLevel').value);
+  if (document.getElementById('fYear').value) p.set('year', document.getElementById('fYear').value);
+  const box = document.getElementById('paperList');
+  box.innerHTML = '<p class="muted">加载中…</p>';
+  try {
+    const d = await api('/papers/public?' + p.toString());
+    if (!d.rows.length) { box.innerHTML = '<p class="muted">该频道暂无示范卷</p>'; document.getElementById('pager').innerHTML = ''; return; }
+    box.innerHTML = d.rows.map(r => `<div class="paper-row">
+      <div class="paper-info">
+        <h4>${r.title}</h4>
+        <div class="paper-meta"><span class="lv ${r.level}">${r.level}</span><span>${r.category}</span>
+          <span>${r.region}</span><span>${r.year} 年</span><span>${r.question_count} 题 · ${r.total_score} 分</span>
+          <span>⬇ ${r.downloads} 次下载</span></div>
+      </div>
+      <div class="paper-acts">
+        <button class="btn btn-ghost btn-sm" onclick="preview(${r.id})">📖 免费试读 30%</button>
+        <button class="btn btn-primary btn-sm" onclick="downloadPaper(${r.id}, '', '试卷')">⬇ 整卷下载</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadPaper(${r.id}, 'docx', '试卷')">🅆 Word</button>
+      </div></div>`).join('');
+    const pages = Math.ceil(d.total / 8);
+    document.getElementById('pager').innerHTML = pages > 1
+      ? Array.from({ length: Math.min(pages, 10) }, (_, i) => `<button class="${i + 1 === PAGE ? 'on' : ''}" onclick="loadList(${i + 1})">${i + 1}</button>`).join('')
+      : '';
+  } catch (e) { box.innerHTML = '<p class="muted">加载失败：' + e.message + '</p>'; }
+}
+
+async function preview(id) {
+  const mask = document.getElementById('pvMask');
+  document.getElementById('pvBody').innerHTML = '<p class="muted">加载中…</p>';
+  mask.classList.add('on');
+  try {
+    const d = await api('/papers/public/' + id + '/preview');
+    const p = d.paper;
+    document.getElementById('pvBody').innerHTML = `
+      <h3 style="margin:0 0 4px">${p.title}</h3>
+      <p class="muted" style="font-size:12.5px;margin:0 0 10px">${p.level} · ${p.region} · ${p.year} 年 · 共 ${p.totalCount} 题 ${p.totalScore} 分 —— 免费试读 ${p.readCount} 题（30%）</p>
+      ${d.questions.map((q, i) => `<div class="pv-q">
+        <div class="m"><b>${i + 1}</b><span>${q.type} · 难度 ${q.difficulty}</span>${(q.kp_names || '').split(/[,，]/)[0] ? `<span>${q.kp_names.split(/[,，]/)[0]}</span>` : ''}</div>
+        <div class="stem">${q.stem}</div>
+        ${q.options ? `<div style="margin-top:6px;font-size:13px;color:var(--text-2);display:grid;gap:2px">${q.options.map(o => `<div><b>${o.l}.</b> ${o.v}</div>`).join('')}</div>` : ''}
+      </div>`).join('')}
+      <div class="locked-note">🔒 试读结束：剩余 ${p.totalCount - p.readCount} 题及答案解析、整卷导出需下载（会员不限次 / 点数按档位计费）</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" onclick="closePv()">关闭</button>
+        <button class="btn btn-ghost btn-sm" onclick="pickToBasket(${id}, ${p.readCount})">🧺 抽题重组（试读题入试题篮）</button>
+        <button class="btn btn-primary btn-sm" onclick="closePv();downloadPaper(${id})">整卷下载</button>
+      </div>`;
+    renderMath(document.getElementById('pvBody'));
+  } catch (e) { document.getElementById('pvBody').innerHTML = '<p class="muted">加载失败：' + e.message + '</p>'; }
+}
+function closePv() { document.getElementById('pvMask').classList.remove('on'); }
+document.getElementById('pvMask').addEventListener('click', e => { if (e.target.id === 'pvMask') closePv(); });
+
+async function pickToBasket(id, readCount) {
+  try {
+    const d = await api('/papers/public/' + id + '/preview');
+    const ids = d.questions.map(q => q.id);
+    const r = await api('/basket', { method: 'POST', body: { questionIds: ids } });
+    toast(`抽题重组：${r.added} 题已加入试题篮，去「智能组卷」汇编成新卷`);
+  } catch (e) { if (e.code === 40100) toast('⚠ 请先登录'); else toast('⚠ ' + e.message); }
+}
+async function downloadPaper(id, format, title) {
+  if (!TOKEN) { toast('⚠ 整卷下载需登录（计费与版权追溯绑定账号）'); return; }
+  try {
+    const w = window.open('', '_blank');
+    const r = await fetch(API + '/papers/' + id + '/export' + (format === 'docx' ? '?format=docx' : ''), { headers: AUTH });
+    if (format === 'docx') {
+      if (!r.ok) { toast('⚠ Word 导出失败'); return; }
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'zhijuan-' + id + '.docx';
+      a.click(); URL.revokeObjectURL(a.href);
+      toast('✅ Word 已下载（公式可编辑）');
+      return;
+    }
+    if (r.status === 429) {
+      const j = await r.json();
+      if (w) w.close();
+      toast('⚠ ' + j.message + '：需 ' + j.data?.needPoints + ' 点，当前 ' + j.data?.balance + ' 点，去「会员」页充值');
+      return;
+    }
+    if (!r.ok) { if (w) w.close(); toast('⚠ 导出失败（HTTP ' + r.status + '）'); return; }
+    const html = await r.text();
+    if (w) { w.document.write(html); w.document.close(); toast('✅ 导出成功，可 Ctrl+P 存 PDF'); loadList(PAGE); }
+  } catch (_) { toast('⚠ 后端未启动'); }
+}
+
+(async function boot() {
+  if (TOKEN) { try { const me = await api('/member/me'); document.getElementById('userBox').textContent = me.member.active ? '👑 会员用户' : '👤 已登录'; } catch (_) {} }
+  loadList(1);
+})();
+</script>
+</body>
+</html>
