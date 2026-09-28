@@ -8,6 +8,17 @@ public class AnswerGrader {
 
     public enum Kind { SINGLE, MULTI, FILL, JUDGE, SOLUTION }
 
+    /** 题型名 → 判分类型（练习/作业两域共用映射） */
+    public static Kind kindOf(String questionType) {
+        return switch (questionType == null ? "" : questionType) {
+            case "单选题" -> Kind.SINGLE;
+            case "多选题" -> Kind.MULTI;
+            case "填空题" -> Kind.FILL;
+            case "判断题" -> Kind.JUDGE;
+            default -> Kind.SOLUTION;
+        };
+    }
+
     /** 返回：true 对 / false 错 / null 待人工批改（解答题） */
     public static Boolean grade(Kind kind, String standard, String userAnswer) {
         if (kind == Kind.SOLUTION) return null;                        // 解答题人工批改

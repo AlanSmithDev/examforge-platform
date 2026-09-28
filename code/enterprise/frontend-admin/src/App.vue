@@ -21,6 +21,8 @@
         <el-menu-item index="coupons">🎟️ 优惠券模板</el-menu-item>
         <el-menu-item index="auditq">📝 题目审核</el-menu-item>
         <el-menu-item index="feedback">🎫 纠错工单</el-menu-item>
+        <el-menu-item index="auditres">📚 资源审核</el-menu-item>
+        <el-menu-item index="copyright">⚖️ 版权工单</el-menu-item>
         <el-menu-item index="audit">🛡 操作审计</el-menu-item>
       </el-menu>
       <el-button style="margin:14px;width:calc(100% - 28px)" @click="logout">退出</el-button>
@@ -182,6 +184,70 @@
         </el-table>
       </div>
 
+      <!-- 资源审核 -->
+      <div v-if="pane === 'auditres'">
+        <h2>资源审核（上架 / 下架 / 驳回，docs/26 F-XKW-01）</h2>
+        <el-radio-group v-model="resStatus" style="margin-bottom:12px" @change="loadRes">
+          <el-radio-button :value="0">待审核</el-radio-button>
+          <el-radio-button :value="1">已上架</el-radio-button>
+          <el-radio-button :value="2">已下架</el-radio-button>
+          <el-radio-button :value="3">已驳回</el-radio-button>
+        </el-radio-group>
+        <el-table :data="resources" size="small">
+          <el-table-column prop="id" label="ID" width="70" />
+          <el-table-column prop="title" label="标题" show-overflow-tooltip />
+          <el-table-column prop="category" label="类别" width="90" />
+          <el-table-column prop="level" label="等级" width="80" />
+          <el-table-column label="价格" width="80">
+            <template #default="{ row }">{{ row.level === 'FREE' ? '免费' : '¥' + ((row.priceCents || 0) / 100).toFixed(2) }}</template>
+          </el-table-column>
+          <el-table-column prop="author" label="作者" width="110" />
+          <el-table-column label="浏览/下载" width="100">
+            <template #default="{ row }">{{ row.browseCount }}/{{ row.downloadCount }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="160">
+            <template #default="{ row }">
+              <template v-if="row.status === 0">
+                <el-button size="small" type="success" @click="setRes(row, 1)">上架</el-button>
+                <el-button size="small" type="danger" @click="setRes(row, 3)">驳回</el-button>
+              </template>
+              <el-button v-else-if="row.status === 1" size="small" @click="setRes(row, 2)">下架</el-button>
+              <el-button v-else-if="row.status === 2 || row.status === 3" size="small" type="success" @click="setRes(row, 1)">重新上架</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <!-- 版权工单 -->
+      <div v-if="pane === 'copyright'">
+        <h2>版权异议 / 申诉工单（异议 → 下架复核；docs/26 F-XKW-14）</h2>
+        <el-radio-group v-model="appealStatus" style="margin-bottom:12px" @change="loadAppeals">
+          <el-radio-button value="OPEN">待处理</el-radio-button>
+          <el-radio-button value="RESOLVED">已解决</el-radio-button>
+          <el-radio-button value="REJECTED">已驳回</el-radio-button>
+          <el-radio-button value="WITHDRAWN">已撤回</el-radio-button>
+        </el-radio-group>
+        <el-table :data="appeals" size="small">
+          <el-table-column prop="id" label="ID" width="70" />
+          <el-table-column prop="targetType" label="对象" width="90" />
+          <el-table-column prop="targetId" label="对象ID" width="80" />
+          <el-table-column prop="appealType" label="类型" width="100" />
+          <el-table-column prop="content" label="描述" show-overflow-tooltip />
+          <el-table-column prop="contact" label="联系方式" width="120" />
+          <el-table-column prop="handler" label="处理人" width="100" />
+          <el-table-column label="操作" width="230">
+            <template #default="{ row }">
+              <template v-if="row.status === 'OPEN'">
+                <el-input v-model="row._remark" size="small" placeholder="处理备注" style="width:120px;margin-right:6px" />
+                <el-button size="small" type="success" @click="handleAppeal(row, 'RESOLVE')">解决</el-button>
+                <el-button size="small" type="danger" @click="handleAppeal(row, 'REJECT')">驳回</el-button>
+              </template>
+              <span v-else class="meta">{{ row.status }} · {{ row.handleRemark }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
       <!-- 审计 -->
       <div v-if="pane === 'audit'">
         <h2>操作审计（只读）</h2>
@@ -217,7 +283,8 @@ const lg = reactive({ mobile: '13000000000', password: 'Admin@123456' })
 const positions = ['home_hero', 'home_banner', 'sidebar_teacher', 'sidebar_student', 'list_inline', 'detail_footer', 'login_promo']
 const ad = reactive({ position: 'home_banner', title: '', imageUrl: '', linkUrl: '', audience: 'ALL', status: 1 })
 const ads = ref([]), notices = ref([]), audits = ref([]), templates = ref([]), auditQ = ref([]), feedbacks = ref([])
-const auditStatus = ref(1), fbStatus = ref(0)
+const resources = ref([]), appeals = ref([])
+const auditStatus = ref(1), fbStatus = ref(0), resStatus = ref(0), appealStatus = ref('OPEN')
 const tpl = reactive({ name: '', type: 'FULL_REDUCTION', discountCents: 100, minSpendCents: 0, total: 100, perLimit: 1, validDays: 30 })
 const notice = reactive({ title: '', content: '' })
 const settings = reactive({ site_name: '', logo_url: '', beian: '', service_phone: '' })
@@ -229,7 +296,22 @@ async function login() {
   loadAll()
 }
 function logout() { token.value = ''; localStorage.removeItem('examforge_admin_token') }
-async function loadAll() { loadDash(); loadAds(); loadNotices(); loadAudits(); loadSettings(); loadTemplates(); loadAuditQ(); loadFeedback() }
+async function loadAll() { loadDash(); loadAds(); loadNotices(); loadAudits(); loadSettings(); loadTemplates(); loadAuditQ(); loadFeedback(); loadRes(); loadAppeals() }
+
+// ---- 资源审核（examforge-resource /api/v1/resources/admin）----
+async function loadRes() { resources.value = (await http.get('/resources/admin/items', { params: { status: resStatus.value, page: 1, size: 30 } })).records }
+async function setRes(row, status) {
+  await http.put('/resources/admin/items/' + row.id + '/status', { status })
+  ElMessage.success(status === 1 ? '已上架' : status === 3 ? '已驳回' : '已下架')
+  loadRes()
+}
+// ---- 版权工单 ----
+async function loadAppeals() { appeals.value = (await http.get('/resources/admin/appeals', { params: { status: appealStatus.value, page: 1, size: 30 } })).records }
+async function handleAppeal(row, action) {
+  await http.put('/resources/admin/appeals/' + row.id + '/handle', { action, remark: row._remark || '' })
+  ElMessage.success(action === 'RESOLVE' ? '已解决' : '已驳回')
+  loadAppeals()
+}
 async function loadFeedback() { feedbacks.value = (await http.get('/questions/admin/feedback', { params: { status: fbStatus.value, pageSize: 30 } })).list }
 async function resolveFb(row, adopt) {
   await http.put('/questions/admin/feedback/' + row.id + '/resolve', { adopt, remark: row._remark || '' })

@@ -86,13 +86,7 @@ public class PracticeService {
             int dur = a.get("durationMs") == null ? 0 : Integer.parseInt(String.valueOf(a.get("durationMs")));
             QuestionSummaryDTO q = std.get(qid);
             if (q == null) continue;
-            AnswerGrader.Kind kind = switch (q.getType()) {
-                case "单选题" -> AnswerGrader.Kind.SINGLE;
-                case "多选题" -> AnswerGrader.Kind.MULTI;
-                case "填空题" -> AnswerGrader.Kind.FILL;
-                case "判断题" -> AnswerGrader.Kind.JUDGE;
-                default -> AnswerGrader.Kind.SOLUTION;
-            };
+            AnswerGrader.Kind kind = AnswerGrader.kindOf(q.getType());
             Boolean right = AnswerGrader.grade(kind, q.getAnswer(), user);
             total++;
             if (Boolean.TRUE.equals(right)) correct++;
