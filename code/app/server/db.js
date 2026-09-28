@@ -235,8 +235,12 @@ const SCHEMA = [
     version INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
     applied_at TEXT DEFAULT (datetime('now','localtime'))
-  )`,
-  // ---- 索引补齐（按真实查询路径，docs/16 §3 索引清单）----
+  )`
+];
+SCHEMA.forEach(sql => db.prepare(sql).run());
+
+// ---- 索引补齐（必须在 MIGRATIONS 之后执行：部分索引列由迁移添加，全新库上先建索引会因缺列崩溃）----
+const INDEXES = [
   `CREATE INDEX IF NOT EXISTS idx_point_log_order ON point_log(order_no)`,
   `CREATE INDEX IF NOT EXISTS idx_user_coupon_expire ON user_coupon(status, expire_at)`,
   `CREATE INDEX IF NOT EXISTS idx_user_coupon_template ON user_coupon(template_id)`,
@@ -247,7 +251,6 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_notify_user ON notify_message(user_id, read, id DESC)`
 ];
-SCHEMA.forEach(sql => db.prepare(sql).run());
 
 // ---- 序号化迁移（上线标准：schema_migrations 版本表驱动，替代裸 try/catch ALTER）----
 const MIGRATIONS = [
@@ -321,6 +324,7 @@ function addColumn(table, col, typ) {
     db.transaction(() => { m.up(); db.prepare('INSERT INTO schema_migrations(version, name) VALUES(?,?)').run(m.version, m.name); })();
   }
 })();
+INDEXES.forEach(sql => db.prepare(sql).run());
 
 // 统一多行查询助手（基于 iterate；全项目避免使用易被误判的简写方法名）
 function fetchAll(sql, ...params) {
