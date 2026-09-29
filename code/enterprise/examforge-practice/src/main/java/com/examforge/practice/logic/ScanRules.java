@@ -1,6 +1,9 @@
 package com.examforge.practice.logic;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /** 扫描阅卷纯规则：扩展名/大小校验 + 状态机（e 卷通二阶段，docs/26 §7；可脱离 Spring 单测） */
@@ -53,5 +56,30 @@ public final class ScanRules {
     /** 存储相对路径：scans/{assignmentId}/{studentId}/{ts}.{ext} */
     public static String storagePath(long assignmentId, long studentId, long ts, String ext) {
         return "scans/" + assignmentId + "/" + studentId + "/" + ts + "." + ext;
+    }
+
+    // ---------- 识别结果导入（docs/26 §7 e 卷通二阶段三期） ----------
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /** 解析识别结果：{"answers":[{questionId,answer}...]} 或裸数组；缺 answer 项跳过；无有效项/结构非法抛 IllegalArgumentException */
+    public static List<Map<String, Object>> parseAnswers(String ocrJson) {
+        if (ocrJson == null || ocrJson.isBlank()) throw new IllegalArgumentException("识别结果为空");
+        try {
+            com.fasterxml.jackson.databind.JsonNode root = JSON.readTree(ocrJson);
+            com.fasterxml.jackson.databind.JsonNode arr = root.isArray() ? root : root.path("answers");
+            if (!arr.isArray()) throw new IllegalArgumentException("识别结果缺少 answers 数组");
+            List<Map<String, Object>> out = new ArrayList<>();
+            for (com.fasterxml.jackson.databind.JsonNode n : arr) {
+                if (!n.hasNonNull("questionId") || !n.has("answer")) continue;
+                out.add(Map.of("questionId", n.get("questionId").asLong(), "answer", n.get("answer").asText()));
+            }
+            if (out.isEmpty()) throw new IllegalArgumentException("识别结果无有效作答项");
+            return out;
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("识别结果 JSON 非法");
+        }
     }
 }

@@ -2,6 +2,9 @@ package com.examforge.practice.logic;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /** 扫描阅卷纯规则单测（扩展名/大小/状态机/存储路径，docs/26 §7 二阶段验收） */
@@ -41,5 +44,21 @@ class ScanRulesTest {
     void 存储路径_按作业学生与时间戳分层() {
         assertEquals("scans/12/345/1727500000000.jpg",
                 ScanRules.storagePath(12, 345, 1727500000000L, "jpg"));
+    }
+
+    @Test
+    void 识别结果解析_对象包裹与裸数组_容错与非法() {
+        assertEquals(List.of(Map.of("questionId", 11L, "answer", "A")),
+                ScanRules.parseAnswers("{\"recognized\":true,\"answers\":[{\"questionId\":11,\"answer\":\"A\"}]}"));
+        assertEquals(2, ScanRules.parseAnswers(
+                "[{\"questionId\":1,\"answer\":\"对\"},{\"questionId\":2,\"answer\":\"\"}]").size());
+        // 缺 answer 的项跳过，有效项保留
+        assertEquals(1, ScanRules.parseAnswers(
+                "[{\"questionId\":1},{\"other\":9},{\"questionId\":2,\"answer\":\"B\"}]").size());
+        assertThrows(IllegalArgumentException.class, () -> ScanRules.parseAnswers(null));
+        assertThrows(IllegalArgumentException.class, () -> ScanRules.parseAnswers("  "));
+        assertThrows(IllegalArgumentException.class, () -> ScanRules.parseAnswers("not-json"));
+        assertThrows(IllegalArgumentException.class, () -> ScanRules.parseAnswers("{\"recognized\":false,\"reason\":\"模糊\"}"));
+        assertThrows(IllegalArgumentException.class, () -> ScanRules.parseAnswers("[]"));
     }
 }

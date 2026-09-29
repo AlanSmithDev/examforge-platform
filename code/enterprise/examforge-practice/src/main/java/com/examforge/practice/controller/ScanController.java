@@ -65,4 +65,13 @@ public class ScanController {
                                                    @PathVariable Long scanId) {
         return Result.ok(scanService.recognizeByAi(Long.valueOf(uid), id, scanId));
     }
+
+    /** 识别结果导入落账（RECOGNIZED → IMPORTED：按题 upsert + 客观题自动判分 + 名单状态/正确率落账；body 可传修正后的 ocrJson） */
+    @PostMapping("/{id}/scans/{scanId}/import")
+    public Result<Map<String, Object>> importScan(@RequestHeader("X-User-Id") String uid, @PathVariable Long id,
+                                                  @PathVariable Long scanId,
+                                                  @RequestBody(required = false) Map<String, Object> body) {
+        String ocrJson = body == null || body.get("ocrJson") == null ? null : String.valueOf(body.get("ocrJson"));
+        return Result.ok(scanService.importScan(Long.valueOf(uid), id, scanId, ocrJson));
+    }
 }
