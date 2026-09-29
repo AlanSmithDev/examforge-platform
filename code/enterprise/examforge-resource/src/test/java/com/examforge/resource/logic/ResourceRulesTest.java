@@ -101,4 +101,14 @@ class ResourceRulesTest {
         assertEquals(0, ResourceRules.resolveSharePct(-10, 50));    // 夹取下限
         assertEquals(100, ResourceRules.resolveSharePct(null, 180)); // 全局比例夹取上限
     }
+
+    @Test
+    void 资源篮单件判定_未上架跳过_已购免费计费() {
+        assertEquals(ResourceRules.BasketMode.SKIP, ResourceRules.basketMode("NORMAL", false, false));
+        assertEquals(ResourceRules.BasketMode.SKIP, ResourceRules.basketMode("FREE", false, false));
+        assertEquals(ResourceRules.BasketMode.OWNED, ResourceRules.basketMode("NORMAL", true, true));
+        assertEquals(ResourceRules.BasketMode.OWNED, ResourceRules.basketMode("BOUTIQUE", true, true));  // 已购不再计费
+        assertEquals(ResourceRules.BasketMode.FREE, ResourceRules.basketMode("FREE", false, true));
+        assertEquals(ResourceRules.BasketMode.POINTS, ResourceRules.basketMode("SPECIAL", false, true));
+    }
 }

@@ -88,6 +88,10 @@
         <el-button :icon="Delete" circle text @click="removeBasket(item)" />
       </article>
       <el-empty v-if="!basket.length" description="资源篮为空：从列表点「+资源篮」加入" />
+      <div v-if="basket.length" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <span style="font-size:11px;color:var(--text-2)">一次结算合并扣点；已购/免费件不重复计费</span>
+        <el-button type="primary" :loading="checkingOut" @click="checkout">一键结算</el-button>
+      </div>
     </el-drawer>
 
     <el-drawer v-model="mineOpen" title="我的下载" size="min(420px,100vw)">
@@ -118,6 +122,7 @@ const detailOpen = ref(false), current = ref({}), preview = ref({})
 const appealOpen = ref(false), appealType = ref('COPYRIGHT'), appealText = ref('')
 const basketOpen = ref(false), basket = ref([])
 const mineOpen = ref(false), mine = ref([])
+const checkingOut = ref(false)
 
 onMounted(() => { reload(); loadBasket() })
 
@@ -183,6 +188,19 @@ async function removeBasket(item) {
 
 async function loadBasket() {
   try { basket.value = await http.get('/resources/basket') } catch { basket.value = [] }
+}
+
+async function checkout() {
+  if (requireLogin()) return
+  if (demoMode.value) { ElMessage.info('演示模式：启动后端后可批量结算'); return }
+  checkingOut.value = true
+  try {
+    const r = await http.post('/resources/basket/checkout')
+    ElMessage.success(`结算完成：扣 ${r.totalCharged} 点（免费 ${r.freeCount} 件、已购跳过 ${r.ownedCount} 件、下架跳过 ${r.skippedCount} 件）`)
+    basket.value = []
+    mine.value = await http.get('/resources/downloads/mine').catch(() => mine.value)
+    mineOpen.value = true
+  } finally { checkingOut.value = false }
 }
 
 async function download(item) {

@@ -53,6 +53,12 @@ public class ResourceController {
         return Result.ok(resourceService.basket(Long.valueOf(uid)));
     }
 
+    /** 资源篮批量结算：判价汇总一次扣点，逐件落账并清空资源篮（docs/26 F-XKW-03） */
+    @PostMapping("/basket/checkout")
+    public Result<Map<String, Object>> checkout(@RequestHeader("X-User-Id") String uid) {
+        return Result.ok(resourceService.checkoutBasket(Long.valueOf(uid)));
+    }
+
     // ---------- 计费下载 ----------
 
     @PostMapping("/{id}/download")

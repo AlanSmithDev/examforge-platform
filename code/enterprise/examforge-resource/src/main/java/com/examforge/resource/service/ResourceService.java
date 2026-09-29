@@ -35,6 +35,7 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** 资源中心核心服务（docs/26 F-XKW-01/02/03/14 + T-26f P3 月度结算） */
 @Slf4j
@@ -107,6 +108,65 @@ public class ResourceService {
                         .eq(ResourceBasket::getUserId, uid).orderByDesc(ResourceBasket::getId))
                 .stream().map(ResourceBasket::getResourceId).toList();
         return ids.isEmpty() ? List.of() : itemMapper.selectBatchIds(ids);
+    }
+
+    /**
+     * 资源篮批量结算（docs/26 F-XKW-03 差距项：合并扣点）：逐件判价汇总 → 一次 deduct 扣取合计
+     * （reason=RESOURCE_BASKET，ref=资源ID逗号串）→ 逐件落账/计数/分成（免费件也落 FREE 记录、
+     * 已购与未上架跳过不重复计费）→ 成功后清空资源篮。不足额整单拒绝（部分成交会造成扣点歧义）。
+     */
+    @Transactional
+    public Map<String, Object> checkoutBasket(Long uid) {
+        List<ResourceItem> items = basket(uid);
+        if (items.isEmpty()) throw new BizException(Result.BAD_REQUEST, "资源篮为空");
+        int balance = entitlementBalance(uid);
+        int total = 0, free = 0, ownedSkipped = 0, skipped = 0;
+        List<Map<String, Object>> out = new ArrayList<>();
+        List<Map.Entry<ResourceItem, Integer>> billables = new ArrayList<>();   // item → 本次计费点数（0=免费）
+        for (ResourceItem r : items) {
+            boolean onShelf = r.getStatus() != null && r.getStatus() == 1;
+            boolean owned = downloadMapper.selectCount(new LambdaQueryWrapper<ResourceDownload>()
+                    .eq(ResourceDownload::getUserId, uid)
+                    .eq(ResourceDownload::getResourceId, r.getId())) > 0;
+            ResourceRules.BasketMode m = ResourceRules.basketMode(r.getLevel(), owned, onShelf);
+            int price = m == ResourceRules.BasketMode.POINTS ? (r.getPriceCents() == null ? 0 : r.getPriceCents()) : 0;
+            switch (m) {
+                case SKIP -> skipped++;
+                case OWNED -> ownedSkipped++;
+                case FREE -> { free++; billables.add(Map.entry(r, 0)); }
+                case POINTS -> { total += price; billables.add(Map.entry(r, price)); }
+            }
+            out.add(Map.of("resourceId", r.getId(), "mode", m.name(), "priceCents", price));
+        }
+        if (total > balance) {
+            throw new BizException(Result.TOO_MANY, "点数不足：本次需 " + total + " 点，余额 " + balance + " 点，请充值后结算");
+        }
+        if (total > 0) {
+            String refs = billables.stream().filter(e -> e.getValue() > 0)
+                    .map(e -> String.valueOf(e.getKey().getId())).collect(Collectors.joining(","));
+            tradeClient.deduct(String.valueOf(uid),
+                    Map.of("points", total, "reason", "RESOURCE_BASKET", "ref", refs));
+        }
+        int charged = 0;
+        for (Map.Entry<ResourceItem, Integer> en : billables) {
+            ResourceItem r = en.getKey();
+            int price = en.getValue();
+            ResourceDownload d = new ResourceDownload();
+            d.setUserId(uid);
+            d.setResourceId(r.getId());
+            d.setMode(price > 0 ? "POINTS" : "FREE");
+            d.setPriceCents(price);
+            d.setCreatedAt(LocalDateTime.now());
+            downloadMapper.insert(d);
+            itemMapper.incrDownload(r.getId());
+            settleCreatorShare(uid, r, price);
+            charged += price;
+        }
+        basketMapper.delete(new LambdaQueryWrapper<ResourceBasket>().eq(ResourceBasket::getUserId, uid));
+        log.info("资源篮批量结算: user={} 件={} 计费={} 免费={} 已购跳过={} 下架跳过={} 扣点={}",
+                uid, items.size(), billables.size() - free, free, ownedSkipped, skipped, charged);
+        return Map.of("totalCharged", charged, "freeCount", free, "ownedCount", ownedSkipped,
+                "skippedCount", skipped, "items", out);
     }
 
     // ---------- 计费下载（docs/26 F-XKW-02：判价→扣点→落账→计数） ----------

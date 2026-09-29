@@ -47,6 +47,16 @@ public final class ResourceRules {
 
     public enum Mode { FREE, POINTS, INSUFFICIENT }
 
+    /** 资源篮单件结算判定结果：未上架跳过 / 已购跳过 / 免费 / 计费（docs/26 F-XKW-03 批量结算） */
+    public enum BasketMode { FREE, POINTS, OWNED, SKIP }
+
+    /** 资源篮单件结算判定：未上架 SKIP；已购 OWNED；免费档 FREE；其余 POINTS 计费 */
+    public static BasketMode basketMode(String level, boolean owned, boolean onShelf) {
+        if (!onShelf) return BasketMode.SKIP;
+        if (owned) return BasketMode.OWNED;
+        return freeLevel(level) ? BasketMode.FREE : BasketMode.POINTS;
+    }
+
     /** 下载判价：免费档/已购 → FREE；余额够 → POINTS；否则 INSUFFICIENT（与 docs/14 D 判价序对齐的精简版） */
     public static Mode decide(String level, boolean owned, int pointBalance, int priceCents) {
         if (freeLevel(level) || owned) return Mode.FREE;
