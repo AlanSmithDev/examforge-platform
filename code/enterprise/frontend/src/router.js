@@ -9,6 +9,7 @@ export default createRouter({
     { path: '/questions/:id', component: () => import('./views/QuestionDetail.vue') },
     { path: '/papers', component: () => import('./views/PaperWorkbench.vue') },
     { path: '/assignments', component: () => import('./views/Assignments.vue') },
+    { path: '/my-assignments', component: () => import('./views/MyAssignments.vue') },
     { path: '/vip', component: () => import('./views/Vip.vue') },
     { path: '/practice', component: () => import('./views/Practice.vue') },
     { path: '/aisearch', component: () => import('./views/AiSearch.vue') },

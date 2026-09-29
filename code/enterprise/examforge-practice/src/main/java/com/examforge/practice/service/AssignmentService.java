@@ -123,6 +123,36 @@ public class AssignmentService {
                 }).toList();
     }
 
+    /** 学生取作业题目（脱敏：不含答案/解析；answerable=可作答，已提交/已关闭仍可回看题目） */
+    public Map<String, Object> questionsForStudent(Long studentId, Long assignmentId) {
+        Assignment a = assignmentMapper.selectById(assignmentId);
+        if (a == null || a.getStatus() == AssignmentRules.DRAFT) {
+            throw new BizException(Result.NOT_FOUND, "作业不存在或未开放");
+        }
+        AssignmentStudent row = studentMapper.selectOne(new LambdaQueryWrapper<AssignmentStudent>()
+                .eq(AssignmentStudent::getAssignmentId, assignmentId)
+                .eq(AssignmentStudent::getStudentId, studentId));
+        if (row == null) throw new BizException(Result.FORBIDDEN, "你不在本作业名单中");
+
+        List<Long> qids = parseQuestionIds(a.getQuestionIds());
+        Map<Long, QuestionSummaryDTO> byId = new HashMap<>();
+        for (QuestionSummaryDTO q : questionClient.listByIds(qids)) byId.put(q.getId(), q);
+        List<Map<String, Object>> questions = qids.stream().map(byId::get).filter(Objects::nonNull)
+                .map(q -> Map.<String, Object>of(
+                        "questionId", q.getId(),
+                        "type", q.getType() == null ? "" : q.getType(),
+                        "stem", q.getStem() == null ? "" : q.getStem(),
+                        "options", q.getOptions() == null ? "" : q.getOptions()))
+                .toList();
+        boolean answerable = a.getStatus() == AssignmentRules.PUBLISHED
+                && row.getStatus() == AssignmentRules.ST_ASSIGNED;
+        return Map.of("assignmentId", assignmentId, "title", a.getTitle(),
+                "deadline", a.getDeadline() == null ? "" : a.getDeadline().toString(),
+                "answerable", answerable,
+                "alreadySubmitted", row.getStatus() != AssignmentRules.ST_ASSIGNED,
+                "questions", questions);
+    }
+
     /** 学生作答：名单校验 → 批量判分 → 明细落库 → 名单状态置 SUBMITTED（超时标记 late） */
     @Transactional
     public Map<String, Object> submit(Long studentId, Long assignmentId, List<Map<String, Object>> answers) {

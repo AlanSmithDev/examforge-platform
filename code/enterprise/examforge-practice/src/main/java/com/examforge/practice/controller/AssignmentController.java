@@ -90,6 +90,12 @@ public class AssignmentController {
         return Result.ok(assignmentService.studentView(Long.valueOf(uid)));
     }
 
+    /** 取作业题目（脱敏：不含答案/解析；answerable=可作答，已提交/已关闭仍可回看题目） */
+    @GetMapping("/{id}/questions")
+    public Result<Map<String, Object>> questions(@RequestHeader("X-User-Id") String uid, @PathVariable Long id) {
+        return Result.ok(assignmentService.questionsForStudent(Long.valueOf(uid), id));
+    }
+
     /** 提交作答：[{questionId, answer, durationMs?}] */
     @PostMapping("/{id}/submit")
     public Result<Map<String, Object>> submit(@RequestHeader("X-User-Id") String uid, @PathVariable Long id,
