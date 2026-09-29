@@ -6,16 +6,19 @@ import com.examforge.api.feign.TradeClient;
 import com.examforge.common.web.GlobalExceptionHandler.BizException;
 import com.examforge.common.web.Result;
 import com.examforge.resource.domain.CopyrightAppeal;
+import com.examforge.resource.domain.CreatorEarning;
 import com.examforge.resource.domain.ResourceBasket;
 import com.examforge.resource.domain.ResourceDownload;
 import com.examforge.resource.domain.ResourceItem;
 import com.examforge.resource.logic.ResourceRules;
 import com.examforge.resource.mapper.CopyrightAppealMapper;
+import com.examforge.resource.mapper.CreatorEarningMapper;
 import com.examforge.resource.mapper.ResourceBasketMapper;
 import com.examforge.resource.mapper.ResourceDownloadMapper;
 import com.examforge.resource.mapper.ResourceItemMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +37,12 @@ public class ResourceService {
     private final ResourceBasketMapper basketMapper;
     private final ResourceDownloadMapper downloadMapper;
     private final CopyrightAppealMapper appealMapper;
+    private final CreatorEarningMapper earningMapper;
     private final TradeClient tradeClient;
+
+    /** 创作者分成比例%（运营可配，docs/26 §6） */
+    @Value("${examforge.resource.share-pct:50}")
+    private int sharePct;
 
     // ---------- 浏览 ----------
 
@@ -117,6 +125,7 @@ public class ResourceService {
         d.setCreatedAt(LocalDateTime.now());
         downloadMapper.insert(d);
         itemMapper.incrDownload(resourceId);
+        settleCreatorShare(uid, r, charged);
         log.info("资源下载: user={} resource={} mode={}", uid, resourceId, mode);
         return Map.of("mode", mode.name(), "charged", charged, "fileKey", r.getFileKey() == null ? "" : r.getFileKey());
     }
@@ -130,6 +139,67 @@ public class ResourceService {
             log.warn("权益查询失败，按 0 余额处理: {}", e.getMessage());
             return 0;
         }
+    }
+
+    /** 创作者分成（docs/26 §6）：POINTS 计费成功且非自下载 → 账本留痕 + 点数即时入账 */
+    private void settleCreatorShare(Long downloader, ResourceItem r, int charged) {
+        Long creator = r.getCreatorUserId();
+        if (creator == null || creator.equals(downloader) || charged <= 0) return;   // 无归属/自下载/免费不分成
+        int share = ResourceRules.shareCents(charged, sharePct);
+        if (share <= 0) return;
+        CreatorEarning e = new CreatorEarning();
+        e.setCreatorUserId(creator);
+        e.setResourceId(r.getId());
+        e.setDownloaderId(downloader);
+        e.setAmountCents(charged);
+        e.setShareCents(share);
+        e.setRatePct(sharePct);
+        e.setCreatedAt(LocalDateTime.now());
+        earningMapper.insert(e);
+        try {
+            tradeClient.credit(String.valueOf(creator),
+                    Map.of("points", share, "reason", "CREATOR_SHARE", "ref", String.valueOf(r.getId())));
+        } catch (Exception ex) {
+            // 入账失败不阻断下载：账本已留痕，月度结算（P3）以账本为准补发
+            log.warn("创作者分成入账失败（账本已留痕待补发）: creator={} share={} err={}", creator, share, ex.getMessage());
+        }
+    }
+
+    // ---------- 创作者（docs/26 §6：上传走既有 admin 上架审核流 + 收益查询） ----------
+
+    /** 创作者上传：creator_user_id=当前用户，status=0 待审（复用 admin 上架审核） */
+    public Map<String, Object> upload(Long uid, ResourceItem r) {
+        if (r.getTitle() == null || r.getStage() == null || r.getCategory() == null) {
+            throw new BizException(Result.BAD_REQUEST, "标题/学段/类别必填");
+        }
+        if (r.getLevel() == null) r.setLevel(ResourceRules.LEVEL_NORMAL);
+        try {
+            ResourceRules.validatePricing(r.getLevel(), r.getPriceCents());
+        } catch (IllegalArgumentException e) {
+            throw new BizException(Result.BAD_REQUEST, e.getMessage());
+        }
+        if (r.getPreviewFreePct() == null) r.setPreviewFreePct(33);
+        if (r.getPriceCents() == null) r.setPriceCents(200);
+        r.setId(null);
+        r.setBrowseCount(null);   // 计数、时间与审核态由服务端决定，不信任请求体
+        r.setDownloadCount(null);
+        r.setCreatedAt(null);
+        r.setUpdatedAt(null);
+        r.setStatus(0);
+        r.setCreatorUserId(uid);
+        itemMapper.insert(r);
+        log.info("创作者上传: creator={} resource={} title={}", uid, r.getId(), r.getTitle());
+        return Map.of("id", r.getId(), "status", r.getStatus());
+    }
+
+    /** 创作者收益：分页流水 + 累计分成（合计按全部流水口径，不随分页截断） */
+    public Map<String, Object> earnings(Long uid, long page, long size) {
+        Page<CreatorEarning> p = earningMapper.selectPage(new Page<>(page, Math.min(100, Math.max(1, size))),
+                new LambdaQueryWrapper<CreatorEarning>()
+                        .eq(CreatorEarning::getCreatorUserId, uid)
+                        .orderByDesc(CreatorEarning::getId));
+        return Map.of("items", p.getRecords(), "total", p.getTotal(),
+                "totalShareCents", earningMapper.sumShare(uid));
     }
 
     public List<ResourceDownload> myDownloads(Long uid) {

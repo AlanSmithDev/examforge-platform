@@ -57,4 +57,15 @@ public class InternalTradeController {
                 String.valueOf(body.getOrDefault("reason", "DEDUCT")),
                 String.valueOf(body.getOrDefault("ref", ""))));
     }
+
+    /** 点数入账（创作者分成等场景 resource 服务 Feign 调用，docs/26 §6；与 reward 区分理由码，上限 10 万点） */
+    @PostMapping("/points/credit")
+    public Result<Map<String, Object>> credit(@RequestHeader("X-User-Id") String uid,
+                                              @RequestBody Map<String, Object> body) {
+        int points = Integer.parseInt(String.valueOf(body.getOrDefault("points", "0")));
+        if (points <= 0 || points > 100000) return Result.fail(Result.BAD_REQUEST, "入账点数非法");
+        return Result.ok(tradeService.credit(Long.valueOf(uid), points,
+                String.valueOf(body.getOrDefault("reason", "CREDIT")),
+                String.valueOf(body.getOrDefault("ref", ""))));
+    }
 }

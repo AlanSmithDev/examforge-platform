@@ -23,6 +23,7 @@ public class ResourceItem {
     private String level;           // FREE/NORMAL/SPECIAL/BOUTIQUE
     private Integer priceCents;
     private String author;
+    private Long creatorUserId;     // 创作者（上传人）用户ID，分成收益归属（T-26f）
     private String school;
     private Integer previewFreePct;
     private String fileKey;

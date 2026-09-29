@@ -20,3 +20,7 @@ mybatis-plus:
     map-underscore-to-camel-case: true
   global-config:
     banner: false
+
+examforge:
+  resource:
+    share-pct: 50   # 创作者分成比例%（docs/26 §6，运营可配）

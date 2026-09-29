@@ -41,6 +41,22 @@ class ResourceRulesTest {
     }
 
     @Test
+    void 分成_按比例向下取整() {
+        assertEquals(100, ResourceRules.shareCents(200, 50));
+        assertEquals(150, ResourceRules.shareCents(500, 30));
+        assertEquals(4, ResourceRules.shareCents(9, 50));      // 4.5 → 4
+        assertEquals(0, ResourceRules.shareCents(1, 50));      // 0.5 → 0
+        assertEquals(0, ResourceRules.shareCents(0, 50));
+        assertEquals(200, ResourceRules.shareCents(200, 100));
+    }
+
+    @Test
+    void 分成_比例夹取0到100() {
+        assertEquals(0, ResourceRules.shareCents(200, -5));    // 负比例夹到 0
+        assertEquals(200, ResourceRules.shareCents(200, 150)); // >100 夹到 100
+    }
+
+    @Test
     void 申诉状态机_OPEN可迁出_终态不可变() {
         assertTrue(ResourceRules.canTransition("OPEN", "RESOLVED"));
         assertTrue(ResourceRules.canTransition("OPEN", "REJECTED"));

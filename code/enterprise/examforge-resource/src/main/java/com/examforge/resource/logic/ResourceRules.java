@@ -46,6 +46,12 @@ public final class ResourceRules {
         return pointBalance >= priceCents ? Mode.POINTS : Mode.INSUFFICIENT;
     }
 
+    /** 创作者分成：分成点数 = floor(实收 × 比例/100)，比例夹取 0~100（运营可配，docs/26 §6）；价格非负由 validatePricing 保证 */
+    public static int shareCents(int priceCents, int ratePct) {
+        int pct = Math.min(100, Math.max(0, ratePct));
+        return priceCents * pct / 100;
+    }
+
     /** 申诉状态机：OPEN 为唯一可迁出态，终态不可再变 */
     public static boolean canTransition(String from, String to) {
         if (APPEAL_OPEN.equals(from)) {

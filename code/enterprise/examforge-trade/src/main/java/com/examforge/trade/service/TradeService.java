@@ -231,6 +231,16 @@ public class TradeService {
         return Map.of("ok", true, "deducted", points);
     }
 
+    /** 点数入账（创作者分成等场景经 Feign 调用，docs/26 §6）：理由码与 reward/deduct 区分，便于对账 */
+    @Transactional
+    public Map<String, Object> credit(Long uid, int points, String reason, String ref) {
+        if (points <= 0) throw new BizException(Result.BAD_REQUEST, "入账点数非法");
+        ensurePointAccount(uid);
+        pointMapper.add(uid, points);
+        addPointLog(uid, points, reason, ref);
+        return Map.of("ok", true, "credited", points);
+    }
+
     // ================= 用户增长域：CDK 激活码 / 积分任务（docs/26 T-26d） =================
 
     /** 生成一批激活码（管理端，低频）：一码一 insert，单批 ≤5000 可接受 */
