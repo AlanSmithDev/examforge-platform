@@ -30,12 +30,13 @@
         <el-table-column label="截止" width="160">
           <template #default="{ row }">{{ row.deadline ? row.deadline.replace('T', ' ').slice(0, 16) : '不限' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="330">
+        <el-table-column label="操作" width="400">
           <template #default="{ row }">
             <el-button v-if="row.status === 0" size="small" type="success" @click="publish(row)">发布</el-button>
             <el-button v-if="row.status === 1" size="small" @click="openRoster(row)">点名</el-button>
             <el-button v-if="row.status === 1" size="small" type="primary" plain @click="makeSheet(row)">答题卡</el-button>
             <el-button size="small" type="warning" plain @click="openReport(row)">班级报告</el-button>
+            <el-button size="small" plain @click="openScans(row)">扫描阅卷</el-button>
             <el-button v-if="row.status !== 2" size="small" type="danger" plain @click="close(row)">关闭</el-button>
           </template>
         </el-table-column>
@@ -75,6 +76,32 @@
           <el-table-column prop="pending" label="待批" width="60" />
         </el-table>
       </template>
+    </el-drawer>
+
+    <el-drawer v-model="scanVisible" :title="'扫描阅卷 · ' + (scanRow ? scanRow.title : '')" size="min(620px,100vw)">
+      <el-table :data="scanRoster" size="small" style="margin-bottom:14px">
+        <el-table-column prop="studentId" label="学生ID" width="90" />
+        <el-table-column label="作业状态" width="90">
+          <template #default="{ row }">{{ ['待完成', '已提交', '已批改'][row.status] }}</template>
+        </el-table-column>
+        <el-table-column label="扫描件" width="80">
+          <template #default="{ row }">{{ row.scanCount }} 份</template>
+        </el-table-column>
+        <el-table-column label="操作" width="230">
+          <template #default="{ row }">
+            <el-upload :show-file-list="false" accept=".jpg,.jpeg,.png,.pdf" :http-request="opt => uploadScan(row, opt)">
+              <el-button size="small" type="primary" plain>上传扫描件</el-button>
+            </el-upload>
+            <el-button v-if="row.scanCount" size="small" @click="loadScans(row.studentId)">查看</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-if="!scanList.length" description="选择学生后上传或查看扫描件" />
+      <div v-for="s in scanList" :key="s.id" style="display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)">
+        <span style="font-size:12px">#{{ s.id }} · {{ s.fileName }} · {{ (s.sizeBytes / 1024).toFixed(0) }}KB · {{ s.status }}</span>
+        <el-button size="small" text type="primary" @click="previewScan(s)">预览</el-button>
+        <el-button v-if="s.status === 'UPLOADED'" size="small" @click="recognize(s)">确认转录完成</el-button>
+      </div>
     </el-drawer>
   </div>
 </template>
@@ -145,6 +172,38 @@ async function makeSheet(row) {
   a.click()
   URL.revokeObjectURL(a.href)
   ElMessage.success(`答题卡已生成（${d.format}，${d.questionCount} 题）`)
+}
+
+// ---- 扫描阅卷（扫描件=批改证据层，docs/26 §7；OCR 为 P3 AI 视觉钩子）----
+const scanVisible = ref(false), scanRow = ref(null), scanRoster = ref([]), scanList = ref([])
+async function openScans(row) {
+  scanRow.value = row
+  scanVisible.value = true
+  scanRoster.value = await http.get('/assignments/' + row.id + '/students')
+  scanList.value = []
+}
+async function loadScans(studentId) {
+  scanList.value = await http.get('/assignments/' + scanRow.value.id + '/scans', { params: { studentId } })
+}
+async function uploadScan(row, opt) {
+  const fd = new FormData()
+  fd.append('file', opt.file)
+  await http.post('/assignments/' + scanRow.value.id + '/students/' + row.studentId + '/scan', fd)
+  ElMessage.success('扫描件已上传')
+  loadScans(row.studentId)
+  scanRoster.value = await http.get('/assignments/' + scanRow.value.id + '/students')
+}
+async function previewScan(s) {
+  // 文件端点需 JWT：blob 拉取再新窗口预览
+  const raw = await fetch('/api/v1/assignments/' + scanRow.value.id + '/scans/' + s.id + '/file',
+    { headers: { Authorization: 'Bearer ' + localStorage.getItem('examforge_token') } })
+  if (!raw.ok) { ElMessage.error('预览失败'); return }
+  window.open(URL.createObjectURL(await raw.blob()))
+}
+async function recognize(s) {
+  await http.post('/assignments/' + scanRow.value.id + '/scans/' + s.id + '/recognize', { ocrJson: '[]' })
+  ElMessage.success('已确认转录完成（P3 接入 AI 视觉后自动识别）')
+  loadScans(s.studentId)
 }
 </script>
 
