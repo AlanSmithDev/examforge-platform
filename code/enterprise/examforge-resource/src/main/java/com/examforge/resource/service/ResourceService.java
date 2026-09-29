@@ -3,6 +3,7 @@ package com.examforge.resource.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.examforge.api.feign.TradeClient;
+import com.examforge.api.feign.UserStatsClient;
 import com.examforge.common.web.GlobalExceptionHandler.BizException;
 import com.examforge.common.web.Result;
 import com.examforge.resource.domain.CopyrightAppeal;
@@ -42,6 +43,7 @@ public class ResourceService {
     private final CopyrightAppealMapper appealMapper;
     private final CreatorEarningMapper earningMapper;
     private final TradeClient tradeClient;
+    private final UserStatsClient userClient;
 
     /** 创作者分成比例%（运营可配，docs/26 §6） */
     @Value("${examforge.resource.share-pct:50}")
@@ -205,7 +207,7 @@ public class ResourceService {
                 "totalShareCents", earningMapper.sumShare(uid));
     }
 
-    /** 月收入榜（docs/26 §6 月收入榜 TOP20 公开展示）：按自然月聚合分成，month 缺省当月 */
+    /** 月收入榜（docs/26 §6 月收入榜 TOP20 公开展示）：按自然月聚合分成，month 缺省当月；昵称经 user 服务补齐，失败降级 #ID */
     public List<Map<String, Object>> monthBoard(String month, Integer limit) {
         YearMonth ym;
         try {
@@ -216,15 +218,36 @@ public class ResourceService {
         int top = Math.min(20, Math.max(1, limit == null ? 20 : limit));
         List<Map<String, Object>> rows = earningMapper.monthBoard(
                 ym.atDay(1).atStartOfDay(), ym.plusMonths(1).atDay(1).atStartOfDay(), top);
+        Map<Long, String> names = nicknames(rows.stream()
+                .map(r -> ((Number) r.get("creatorUserId")).longValue()).toList());
         List<Map<String, Object>> out = new ArrayList<>(rows.size());
         for (int i = 0; i < rows.size(); i++) {
             Map<String, Object> r = rows.get(i);
+            long cid = ((Number) r.get("creatorUserId")).longValue();
+            String nick = names.get(cid);
             out.add(Map.of("rank", i + 1,
-                    "creatorUserId", ((Number) r.get("creatorUserId")).longValue(),
+                    "creatorUserId", cid,
+                    "nickname", nick == null || nick.isBlank() ? "创作者#" + cid : nick,
                     "shareCents", ((Number) r.get("shareCents")).intValue(),
                     "downloads", ((Number) r.get("cnt")).intValue()));
         }
         return out;
+    }
+
+    /** 批量昵称（user 服务不可用时降级为空映射，榜单仍可用） */
+    private Map<Long, String> nicknames(List<Long> ids) {
+        if (ids.isEmpty()) return Map.of();
+        try {
+            String joined = ids.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+            Map<Long, String> out = new java.util.HashMap<>();
+            for (Map<String, Object> u : userClient.batch(joined)) {
+                out.put(((Number) u.get("id")).longValue(), String.valueOf(u.getOrDefault("nickname", "")));
+            }
+            return out;
+        } catch (Exception e) {
+            log.warn("榜单昵称批量查询失败（降级 #ID 展示）: {}", e.getMessage());
+            return Map.of();
+        }
     }
 
     public List<ResourceDownload> myDownloads(Long uid) {

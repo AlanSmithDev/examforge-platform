@@ -67,7 +67,7 @@
       <h2>月收入榜 TOP20</h2>
       <el-table v-if="board.length" :data="board" size="small">
         <el-table-column prop="rank" label="#" width="56" />
-        <el-table-column label="创作者" width="150"><template #default="{ row }">创作者#{{ row.creatorUserId }}</template></el-table-column>
+        <el-table-column label="创作者" width="150"><template #default="{ row }">{{ row.nickname || ('创作者#' + row.creatorUserId) }}</template></el-table-column>
         <el-table-column label="本月分成"><template #default="{ row }"><b style="color:var(--primary)">{{ row.shareCents }} 点 ≈ ¥{{ (row.shareCents / 100).toFixed(2) }}</b></template></el-table-column>
         <el-table-column prop="downloads" label="计费下载笔数" width="130" />
       </el-table>
@@ -103,9 +103,9 @@ async function loadBoard() {
     board.value = await http.get('/resources/creator/board')
   } catch {
     board.value = [
-      { rank: 1, creatorUserId: 10086, shareCents: 3260000, downloads: 16300 },
-      { rank: 2, creatorUserId: 10010, shareCents: 2110000, downloads: 10550 },
-      { rank: 3, creatorUserId: 10032, shareCents: 1340000, downloads: 6700 }
+      { rank: 1, creatorUserId: 10086, nickname: '珠溪语文', shareCents: 3260000, downloads: 16300 },
+      { rank: 2, creatorUserId: 10010, nickname: '学科网数编组', shareCents: 2110000, downloads: 10550 },
+      { rank: 3, creatorUserId: 10032, nickname: '勤勉理科', shareCents: 1340000, downloads: 6700 }
     ]
   }
 }
