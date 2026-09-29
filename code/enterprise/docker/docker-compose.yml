@@ -36,7 +36,7 @@ services:
 
   gateway:
     build: { context: .., dockerfile: docker/Dockerfile, args: { MODULE: examforge-gateway } }
-    environment: [ JWT_SECRET=${JWT_SECRET:-examforge-dev-secret-change-in-prod-0123456789abcdef} ]
+    environment: [ "JWT_SECRET=${JWT_SECRET:-examforge-dev-secret-change-in-prod-0123456789abcdef}" ]
     ports: ["8080:8080"]
     depends_on: [ user, question, paper, admin ]
 
