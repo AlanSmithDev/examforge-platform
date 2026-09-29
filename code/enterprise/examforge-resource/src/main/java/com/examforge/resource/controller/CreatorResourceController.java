@@ -6,6 +6,7 @@ import com.examforge.resource.service.ResourceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /** 创作者中心（docs/26 §6：上传→待审→上架→下载计费→分成入账；月度结算提现为 P3） */
@@ -29,5 +30,12 @@ public class CreatorResourceController {
                                                 @RequestParam(defaultValue = "1") long page,
                                                 @RequestParam(defaultValue = "20") long size) {
         return Result.ok(resourceService.earnings(Long.valueOf(uid), page, size));
+    }
+
+    /** 月收入榜（公开榜，docs/26 §6 强激励展示；网关对 board 匿名放行） */
+    @GetMapping("/board")
+    public Result<List<Map<String, Object>>> board(@RequestParam(required = false) String month,
+                                                   @RequestParam(required = false) Integer limit) {
+        return Result.ok(resourceService.monthBoard(month, limit));
     }
 }

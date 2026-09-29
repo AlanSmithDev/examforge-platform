@@ -62,6 +62,18 @@
         <p class="hint" style="margin-left:0;margin-top:10px;display:block">分成即时入账点数账户（理由码 CREATOR_SHARE，自下载不分成）；月度结算提现为 P3 规划。服务不可用时展示演示数据。</p>
       </section>
     </div>
+
+    <section class="panel" style="margin-top:16px">
+      <h2>月收入榜 TOP20</h2>
+      <el-table v-if="board.length" :data="board" size="small">
+        <el-table-column prop="rank" label="#" width="56" />
+        <el-table-column label="创作者" width="150"><template #default="{ row }">创作者#{{ row.creatorUserId }}</template></el-table-column>
+        <el-table-column label="本月分成"><template #default="{ row }"><b style="color:var(--primary)">{{ row.shareCents }} 点 ≈ ¥{{ (row.shareCents / 100).toFixed(2) }}</b></template></el-table-column>
+        <el-table-column prop="downloads" label="计费下载笔数" width="130" />
+      </el-table>
+      <el-empty v-else description="本月暂无分成记录：等待创作者资源被点数下载" />
+      <p class="hint" style="margin-left:0;display:block;margin-top:8px">按自然月聚合分成流水（docs/26 §6 月收入榜）；展示创作者#ID，接真实昵称为后续增强。</p>
+    </section>
   </div>
 </template>
 
@@ -82,8 +94,21 @@ const form = ref({ title: '', stage: 3, subject: '数学', category: 'PPT课件'
 const priceYuan = ref(2)
 const uploading = ref(false)
 const earnings = ref([]), earningTotal = ref(0), totalShare = ref(0), earningPage = ref(1), earningSize = 10
+const board = ref([])
 
-onMounted(loadEarnings)
+onMounted(() => { loadEarnings(); loadBoard() })
+
+async function loadBoard() {
+  try {
+    board.value = await http.get('/resources/creator/board')
+  } catch {
+    board.value = [
+      { rank: 1, creatorUserId: 10086, shareCents: 3260000, downloads: 16300 },
+      { rank: 2, creatorUserId: 10010, shareCents: 2110000, downloads: 10550 },
+      { rank: 3, creatorUserId: 10032, shareCents: 1340000, downloads: 6700 }
+    ]
+  }
+}
 
 async function loadEarnings() {
   try {

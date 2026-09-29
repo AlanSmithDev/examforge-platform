@@ -71,8 +71,9 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     @Override
     public int getOrder() { return -100; }
 
-    /** 资源中心公开读：列表与数字详情匿名可浏览（docs/26 §11）；资源篮/下载/创作者/申诉等其余子路径须登录 */
+    /** 资源中心公开读：列表/数字详情匿名 + 创作者月收入榜公开榜（docs/26 §6）；资源篮/下载/创作者其余/申诉等须登录 */
     static boolean resourcePublicRead(String path) {
-        return path.equals("/api/v1/resources") || path.matches("/api/v1/resources/\\d+");
+        return path.equals("/api/v1/resources") || path.matches("/api/v1/resources/\\d+")
+                || path.equals("/api/v1/resources/creator/board");
     }
 }

@@ -24,6 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -200,6 +203,28 @@ public class ResourceService {
                         .orderByDesc(CreatorEarning::getId));
         return Map.of("items", p.getRecords(), "total", p.getTotal(),
                 "totalShareCents", earningMapper.sumShare(uid));
+    }
+
+    /** 月收入榜（docs/26 §6 月收入榜 TOP20 公开展示）：按自然月聚合分成，month 缺省当月 */
+    public List<Map<String, Object>> monthBoard(String month, Integer limit) {
+        YearMonth ym;
+        try {
+            ym = (month == null || month.isBlank()) ? YearMonth.now() : YearMonth.parse(month);
+        } catch (DateTimeParseException e) {
+            throw new BizException(Result.BAD_REQUEST, "month 须为 yyyy-MM 格式");
+        }
+        int top = Math.min(20, Math.max(1, limit == null ? 20 : limit));
+        List<Map<String, Object>> rows = earningMapper.monthBoard(
+                ym.atDay(1).atStartOfDay(), ym.plusMonths(1).atDay(1).atStartOfDay(), top);
+        List<Map<String, Object>> out = new ArrayList<>(rows.size());
+        for (int i = 0; i < rows.size(); i++) {
+            Map<String, Object> r = rows.get(i);
+            out.add(Map.of("rank", i + 1,
+                    "creatorUserId", ((Number) r.get("creatorUserId")).longValue(),
+                    "shareCents", ((Number) r.get("shareCents")).intValue(),
+                    "downloads", ((Number) r.get("cnt")).intValue()));
+        }
+        return out;
     }
 
     public List<ResourceDownload> myDownloads(Long uid) {

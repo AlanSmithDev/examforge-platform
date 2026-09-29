@@ -8,10 +8,11 @@ import static org.junit.jupiter.api.Assertions.*;
 class AuthGlobalFilterPublicReadTest {
 
     @Test
-    void 资源公开读_仅列表与数字详情() {
+    void 资源公开读_列表数字详情与公开榜() {
         assertTrue(AuthGlobalFilter.resourcePublicRead("/api/v1/resources"));
         assertTrue(AuthGlobalFilter.resourcePublicRead("/api/v1/resources/5"));
         assertTrue(AuthGlobalFilter.resourcePublicRead("/api/v1/resources/123456"));
+        assertTrue(AuthGlobalFilter.resourcePublicRead("/api/v1/resources/creator/board"));
     }
 
     @Test
