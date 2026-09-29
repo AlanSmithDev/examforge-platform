@@ -35,9 +35,10 @@ public class QuestionController {
                                             @RequestParam(required = false) String category,
                                             @RequestParam(required = false) String kp,
                                             @RequestParam(required = false) String keyword,
+                                            @RequestParam(required = false) String literacy,
                                             @RequestParam(defaultValue = "1") long pageNo,
                                             @RequestParam(defaultValue = "10") long pageSize) {
-        Page<Question> p = service.search(subjectId, scene, type, difficulty, category, kp, keyword, pageNo, pageSize);
+        Page<Question> p = service.search(subjectId, scene, type, difficulty, category, kp, keyword, literacy, pageNo, pageSize);
         return Result.ok(Map.of("total", p.getTotal(), "pageNo", pageNo, "pageSize", pageSize, "list", p.getRecords()));
     }
 

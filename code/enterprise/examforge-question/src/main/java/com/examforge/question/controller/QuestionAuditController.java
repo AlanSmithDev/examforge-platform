@@ -98,4 +98,23 @@ public class QuestionAuditController {
         mapper.updateById(q);
         return Result.ok(Map.of("id", id, "status", 1));
     }
+
+    // ---------- 素养标签（T-26a，docs/27 §6） ----------
+
+    /** 素养自动打标：literacy 为空的题目按知识点关键词映射初打（幂等可重跑）；subjectId 可选 */
+    @PostMapping("/literacy/auto-tag")
+    public Result<Map<String, Object>> autoTagLiteracy(@RequestHeader("X-User-Role") String role,
+                                                       @RequestParam(required = false) Long subjectId) {
+        requireEditor(role);
+        return Result.ok(Map.of("tagged", questionService.autoTagLiteracy(subjectId)));
+    }
+
+    /** 手工设置素养（运营单题覆盖，六维校验，逗号分隔） */
+    @PutMapping("/{id}/literacy")
+    public Result<Map<String, Object>> setLiteracy(@RequestHeader("X-User-Role") String role, @PathVariable Long id,
+                                                   @RequestBody Map<String, Object> body) {
+        requireEditor(role);
+        questionService.setLiteracy(id, String.valueOf(body.getOrDefault("literacy", "")));
+        return Result.ok(Map.of("id", id));
+    }
 }

@@ -72,6 +72,6 @@ public class InternalQuestionController {
                                  @RequestParam(required = false) String type,
                                  @RequestParam(required = false) Integer difficulty,
                                  @RequestParam(defaultValue = "10") int limit) {
-        return service.search(subjectId, null, type, difficulty, null, null, keyword, 1, limit).getRecords();
+        return service.search(subjectId, null, type, difficulty, null, null, keyword, null, 1, limit).getRecords();
     }
 }

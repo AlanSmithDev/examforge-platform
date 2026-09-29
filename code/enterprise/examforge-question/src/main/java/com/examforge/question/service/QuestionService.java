@@ -2,14 +2,18 @@ package com.examforge.question.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.examforge.common.web.GlobalExceptionHandler.BizException;
+import com.examforge.common.web.Result;
 import com.examforge.question.domain.Question;
+import com.examforge.question.logic.LiteracyRules;
 import com.examforge.question.mapper.QuestionMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.List;
@@ -31,7 +35,7 @@ public class QuestionService {
     private String detailKey(Long id) { return "q:detail:" + id; }
 
     public Page<Question> search(Long subjectId, String scene, String type, Integer difficulty,
-                                 String category, String kp, String keyword, long pageNo, long pageSize) {
+                                 String category, String kp, String keyword, String literacy, long pageNo, long pageSize) {
         // ES 检索通道（docs/03）：有关键词且 ES 启用时优先走 ES，故障自动降级 LIKE
         if (keyword != null && !keyword.isBlank() && esSearchService.enabled()) {
             try {
@@ -41,7 +45,8 @@ public class QuestionService {
                             .eq(Question::getStatus, 2).in(Question::getId, ids)
                             .eq(scene != null && !scene.isBlank(), Question::getScene, scene)
                             .eq(category != null && !category.isBlank(), Question::getCategory, category)
-                            .like(kp != null && !kp.isBlank(), Question::getKpNames, kp);
+                            .like(kp != null && !kp.isBlank(), Question::getKpNames, kp)
+                            .like(literacy != null && !literacy.isBlank(), Question::getLiteracy, literacy);
                     List<Question> rows = mapper.selectList(w);
                     rows.sort(java.util.Comparator.comparingInt(q -> ids.indexOf(q.getId())));   // 按相关度排序
                     Page<Question> page = new Page<>(pageNo, pageSize, rows.size());
@@ -53,11 +58,11 @@ public class QuestionService {
                 // 降级到 LIKE
             }
         }
-        return searchByDb(subjectId, scene, type, difficulty, category, kp, keyword, pageNo, pageSize);
+        return searchByDb(subjectId, scene, type, difficulty, category, kp, keyword, literacy, pageNo, pageSize);
     }
 
     public Page<Question> searchByDb(Long subjectId, String scene, String type, Integer difficulty,
-                                     String category, String kp, String keyword, long pageNo, long pageSize) {
+                                     String category, String kp, String keyword, String literacy, long pageNo, long pageSize) {
         LambdaQueryWrapper<Question> w = new LambdaQueryWrapper<Question>()
                 .eq(Question::getStatus, 2)
                 .eq(subjectId != null, Question::getSubjectId, subjectId)
@@ -66,6 +71,7 @@ public class QuestionService {
                 .eq(difficulty != null, Question::getDifficulty, difficulty)
                 .eq(category != null && !category.isBlank(), Question::getCategory, category)
                 .like(kp != null && !kp.isBlank(), Question::getKpNames, kp)
+                .like(literacy != null && !literacy.isBlank(), Question::getLiteracy, literacy)
                 .and(keyword != null && !keyword.isBlank(),
                         x -> x.like(Question::getStem, keyword).or().like(Question::getAnswer, keyword))
                 .orderByDesc(Question::getUseCount)
@@ -131,5 +137,42 @@ public class QuestionService {
     /** 服务间内部接口：按 ID 批量取题（paper 整卷插题的考查范围聚合/导出渲染，避免 N+1） */
     public List<Question> listByIds(List<Long> ids) {
         return ids == null || ids.isEmpty() ? List.of() : mapper.selectBatchIds(ids);
+    }
+
+    // ---------- 素养标签（T-26a，docs/27 §6：按知识点映射初打 + 运营覆盖） ----------
+
+    /** 素养自动打标：literacy 为空的题目按知识点关键词映射初打（入库流水线/运营可重复调用，幂等），返回打标数 */
+    @Transactional
+    public int autoTagLiteracy(Long subjectId) {
+        List<Question> pending = mapper.selectList(new LambdaQueryWrapper<Question>()
+                .eq(subjectId != null, Question::getSubjectId, subjectId)
+                .and(x -> x.isNull(Question::getLiteracy).or().eq(Question::getLiteracy, "")));
+        int tagged = 0;
+        for (Question q : pending) {
+            List<String> tags = LiteracyRules.autoTag(q.getKpNames());
+            if (tags.isEmpty()) continue;   // 知识点未命中任何维度：不猜，留给模型复核/运营
+            Question u = new Question();
+            u.setId(q.getId());
+            u.setLiteracy(String.join(",", tags));
+            mapper.updateById(u);
+            tagged++;
+        }
+        return tagged;
+    }
+
+    /** 手工设置素养（运营单题覆盖，校验六维；同时清详情缓存保持一致） */
+    public void setLiteracy(Long id, String literacy) {
+        if (mapper.selectById(id) == null) throw new BizException(Result.NOT_FOUND, "题目不存在");
+        String csv;
+        try {
+            csv = LiteracyRules.normalizeCsv(literacy);
+        } catch (IllegalArgumentException e) {
+            throw new BizException(Result.BAD_REQUEST, e.getMessage());
+        }
+        Question u = new Question();
+        u.setId(id);
+        u.setLiteracy(csv);
+        mapper.updateById(u);
+        try { redis.delete(detailKey(id)); } catch (Exception ignored) { }   // 缓存 fail-open
     }
 }
