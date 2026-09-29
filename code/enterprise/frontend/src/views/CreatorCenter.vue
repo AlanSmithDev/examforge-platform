@@ -47,6 +47,7 @@
           <div><small>累计分成</small><b>{{ totalShare }}</b><em>点 ≈ ¥{{ (totalShare / 100).toFixed(2) }}</em></div>
           <div><small>分成笔数</small><b>{{ earningTotal }}</b></div>
           <div><small>记账比例</small><b>{{ demoMode ? '50%' : '流水内快照' }}</b></div>
+          <div><small>签约状态</small><b v-if="contract">{{ contract.ratePct }}%</b><b v-else>未签约</b><em>{{ contract ? contract.subject : '按全局默认比例' }}</em></div>
         </div>
         <el-table v-if="earnings.length" :data="earnings" size="small" style="margin-top:12px">
           <el-table-column label="资源" width="76"><template #default="{ row }">#{{ row.resourceId }}</template></el-table-column>
@@ -110,8 +111,13 @@ const uploading = ref(false)
 const earnings = ref([]), earningTotal = ref(0), totalShare = ref(0), earningPage = ref(1), earningSize = 10
 const board = ref([])
 const settlements = ref([]), settlementTotal = ref(0), settlementPage = ref(1), settlementSize = 10
+const contract = ref(null)
 
-onMounted(() => { loadEarnings(); loadBoard(); loadSettlements() })
+onMounted(() => { loadEarnings(); loadBoard(); loadSettlements(); loadContract() })
+
+async function loadContract() {
+  try { contract.value = await http.get('/resources/creator/contract') } catch { contract.value = null }
+}
 
 async function loadBoard() {
   try {

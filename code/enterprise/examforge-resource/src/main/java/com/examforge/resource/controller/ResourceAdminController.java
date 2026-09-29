@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.examforge.common.web.GlobalExceptionHandler.BizException;
 import com.examforge.common.web.Result;
 import com.examforge.resource.domain.CopyrightAppeal;
+import com.examforge.resource.domain.CreatorContract;
 import com.examforge.resource.domain.ResourceItem;
 import com.examforge.resource.logic.ResourceRules;
 import com.examforge.resource.mapper.CopyrightAppealMapper;
@@ -99,6 +100,30 @@ public class ResourceAdminController {
                                               @RequestParam(required = false) String month) {
         requireRole(role);
         return Result.ok(resourceService.settleMonth(month));
+    }
+
+    // ---------- 创作者签约（T-26f 收尾，docs/26 §6） ----------
+
+    @PostMapping("/creator/contract")
+    public Result<Map<String, Object>> createContract(@RequestHeader(value = "X-User-Role", required = false) String role,
+                                                      @RequestBody CreatorContract c) {
+        requireRole(role);
+        return Result.ok(resourceService.createContract(c));
+    }
+
+    @GetMapping("/creator/contracts")
+    public Result<Page<CreatorContract>> contracts(@RequestHeader(value = "X-User-Role", required = false) String role,
+                                                   @RequestParam(defaultValue = "1") long page,
+                                                   @RequestParam(defaultValue = "20") long size) {
+        requireRole(role);
+        return Result.ok(resourceService.contracts(page, size));
+    }
+
+    @PutMapping("/creator/contracts/{id}/end")
+    public Result<Map<String, Object>> endContract(@RequestHeader(value = "X-User-Role", required = false) String role,
+                                                   @PathVariable Long id) {
+        requireRole(role);
+        return Result.ok(resourceService.endContract(id));
     }
 
     private void requireRole(String role) {

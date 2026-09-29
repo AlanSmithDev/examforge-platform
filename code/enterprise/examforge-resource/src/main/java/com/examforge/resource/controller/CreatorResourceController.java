@@ -2,6 +2,7 @@ package com.examforge.resource.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.examforge.common.web.Result;
+import com.examforge.resource.domain.CreatorContract;
 import com.examforge.resource.domain.CreatorSettlement;
 import com.examforge.resource.domain.ResourceItem;
 import com.examforge.resource.service.ResourceService;
@@ -47,5 +48,11 @@ public class CreatorResourceController {
                                                        @RequestParam(defaultValue = "1") long page,
                                                        @RequestParam(defaultValue = "20") long size) {
         return Result.ok(resourceService.settlements(Long.valueOf(uid), page, size));
+    }
+
+    /** 我的生效合同（无签约返回 null，前端展示默认比例） */
+    @GetMapping("/contract")
+    public Result<CreatorContract> contract(@RequestHeader("X-User-Id") String uid) {
+        return Result.ok(resourceService.myContract(Long.valueOf(uid)));
     }
 }

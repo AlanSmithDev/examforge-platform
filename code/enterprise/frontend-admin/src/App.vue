@@ -22,6 +22,7 @@
         <el-menu-item index="auditq">📝 题目审核</el-menu-item>
         <el-menu-item index="feedback">🎫 纠错工单</el-menu-item>
         <el-menu-item index="auditres">📚 资源审核</el-menu-item>
+        <el-menu-item index="contracts">🤝 创作者签约</el-menu-item>
         <el-menu-item index="copyright">⚖️ 版权工单</el-menu-item>
         <el-menu-item index="audit">🛡 操作审计</el-menu-item>
       </el-menu>
@@ -218,6 +219,34 @@
         </el-table>
       </div>
 
+      <!-- 创作者签约 -->
+      <div v-if="pane === 'contracts'">
+        <h2>创作者签约（主体 / 分成比例 / 结算周期；docs/26 §6，签约比例优先于全局默认）</h2>
+        <el-card style="margin-bottom:14px">
+          <el-input-number v-model="contractForm.creatorUserId" :min="1" placeholder="创作者ID" style="width:140px;margin-right:8px" />
+          <el-input v-model="contractForm.subject" placeholder="签约主体（实名/笔名/机构）" style="width:220px;margin-right:8px" />
+          <el-input-number v-model="contractForm.ratePct" :min="0" :max="100" style="width:120px;margin-right:8px" />
+          <span class="tip">%分成比例</span>
+          <el-button type="primary" style="margin-left:12px" @click="createContract">签约生效</el-button>
+        </el-card>
+        <el-table :data="contracts" size="small">
+          <el-table-column prop="id" label="ID" width="70" />
+          <el-table-column prop="creatorUserId" label="创作者" width="90" />
+          <el-table-column prop="subject" label="签约主体" />
+          <el-table-column label="分成比例" width="90"><template #default="{ row }">{{ row.ratePct }}%</template></el-table-column>
+          <el-table-column prop="settleCycle" label="结算周期" width="100" />
+          <el-table-column label="状态" width="90"><template #default="{ row }">{{ row.status === 'ACTIVE' ? '生效中' : '已结束' }}</template></el-table-column>
+          <el-table-column label="合同期" width="300">
+            <template #default="{ row }">{{ (row.startAt || '').replace('T', ' ') }} ~ {{ row.endAt ? row.endAt.replace('T', ' ') : '长期有效' }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="100">
+            <template #default="{ row }">
+              <el-button v-if="row.status === 'ACTIVE'" size="small" type="danger" @click="endContract(row)">解约</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
       <!-- 版权工单 -->
       <div v-if="pane === 'copyright'">
         <h2>版权异议 / 申诉工单（异议 → 下架复核；docs/26 F-XKW-14）</h2>
@@ -284,6 +313,8 @@ const positions = ['home_hero', 'home_banner', 'sidebar_teacher', 'sidebar_stude
 const ad = reactive({ position: 'home_banner', title: '', imageUrl: '', linkUrl: '', audience: 'ALL', status: 1 })
 const ads = ref([]), notices = ref([]), audits = ref([]), templates = ref([]), auditQ = ref([]), feedbacks = ref([])
 const resources = ref([]), appeals = ref([])
+const contracts = ref([])
+const contractForm = reactive({ creatorUserId: null, subject: '', ratePct: 50 })
 const auditStatus = ref(1), fbStatus = ref(0), resStatus = ref(0), appealStatus = ref('OPEN')
 const tpl = reactive({ name: '', type: 'FULL_REDUCTION', discountCents: 100, minSpendCents: 0, total: 100, perLimit: 1, validDays: 30 })
 const notice = reactive({ title: '', content: '' })
@@ -296,7 +327,22 @@ async function login() {
   loadAll()
 }
 function logout() { token.value = ''; localStorage.removeItem('examforge_admin_token') }
-async function loadAll() { loadDash(); loadAds(); loadNotices(); loadAudits(); loadSettings(); loadTemplates(); loadAuditQ(); loadFeedback(); loadRes(); loadAppeals() }
+async function loadAll() { loadDash(); loadAds(); loadNotices(); loadAudits(); loadSettings(); loadTemplates(); loadAuditQ(); loadFeedback(); loadRes(); loadAppeals(); loadContracts() }
+
+// ---- 创作者签约（examforge-resource /api/v1/resources/admin/creator）----
+async function loadContracts() { contracts.value = (await http.get('/resources/admin/creator/contracts', { params: { page: 1, size: 30 } })).records }
+async function createContract() {
+  if (!contractForm.creatorUserId || !contractForm.subject) { ElMessage.warning('创作者ID与签约主体必填'); return }
+  await http.post('/resources/admin/creator/contract', { ...contractForm })
+  ElMessage.success('已签约生效，分成比例即时覆盖全局默认')
+  contractForm.subject = ''
+  loadContracts()
+}
+async function endContract(row) {
+  await http.put('/resources/admin/creator/contracts/' + row.id + '/end')
+  ElMessage.success('已解约，分成回落全局默认比例')
+  loadContracts()
+}
 
 // ---- 资源审核（examforge-resource /api/v1/resources/admin）----
 async function loadRes() { resources.value = (await http.get('/resources/admin/items', { params: { status: resStatus.value, page: 1, size: 30 } })).records }

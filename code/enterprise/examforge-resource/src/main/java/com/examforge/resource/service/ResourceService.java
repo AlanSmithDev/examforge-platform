@@ -8,6 +8,7 @@ import com.examforge.api.feign.UserStatsClient;
 import com.examforge.common.web.GlobalExceptionHandler.BizException;
 import com.examforge.common.web.Result;
 import com.examforge.resource.domain.CopyrightAppeal;
+import com.examforge.resource.domain.CreatorContract;
 import com.examforge.resource.domain.CreatorEarning;
 import com.examforge.resource.domain.CreatorSettlement;
 import com.examforge.resource.domain.ResourceBasket;
@@ -15,6 +16,7 @@ import com.examforge.resource.domain.ResourceDownload;
 import com.examforge.resource.domain.ResourceItem;
 import com.examforge.resource.logic.ResourceRules;
 import com.examforge.resource.mapper.CopyrightAppealMapper;
+import com.examforge.resource.mapper.CreatorContractMapper;
 import com.examforge.resource.mapper.CreatorEarningMapper;
 import com.examforge.resource.mapper.CreatorSettlementMapper;
 import com.examforge.resource.mapper.ResourceBasketMapper;
@@ -46,6 +48,7 @@ public class ResourceService {
     private final CopyrightAppealMapper appealMapper;
     private final CreatorEarningMapper earningMapper;
     private final CreatorSettlementMapper settlementMapper;
+    private final CreatorContractMapper contractMapper;
     private final TradeClient tradeClient;
     private final UserStatsClient userClient;
     private final JdbcTemplate jdbcTemplate;
@@ -151,11 +154,12 @@ public class ResourceService {
         }
     }
 
-    /** 创作者分成（docs/26 §6）：POINTS 计费成功且非自下载 → 账本留痕 + 点数即时入账 */
+    /** 创作者分成（docs/26 §6）：POINTS 计费成功且非自下载 → 账本留痕 + 点数即时入账；比例取签约优先（快照入账本） */
     private void settleCreatorShare(Long downloader, ResourceItem r, int charged) {
         Long creator = r.getCreatorUserId();
         if (creator == null || creator.equals(downloader) || charged <= 0) return;   // 无归属/自下载/免费不分成
-        int share = ResourceRules.shareCents(charged, sharePct);
+        int rate = shareRateFor(creator);
+        int share = ResourceRules.shareCents(charged, rate);
         if (share <= 0) return;
         CreatorEarning e = new CreatorEarning();
         e.setCreatorUserId(creator);
@@ -163,7 +167,7 @@ public class ResourceService {
         e.setDownloaderId(downloader);
         e.setAmountCents(charged);
         e.setShareCents(share);
-        e.setRatePct(sharePct);
+        e.setRatePct(rate);
         e.setCreditStatus(0);   // 先记待结算，入账成功置 1（失败由月度结算补发，docs/26 §6 P3）
         e.setCreatedAt(LocalDateTime.now());
         earningMapper.insert(e);
@@ -177,6 +181,17 @@ public class ResourceService {
             // 入账失败不阻断下载：账本行保持待结算（credit_status=0），月度结算任务按自然月聚合补发
             log.warn("创作者分成入账失败（账本已留痕待补发）: creator={} share={} err={}", creator, share, ex.getMessage());
         }
+    }
+
+    /** 生效签约比例：有生效合同取签约比例，无合同/查询失败降级全局默认（docs/26 §6 签约比例优先） */
+    private int shareRateFor(Long creator) {
+        try {
+            CreatorContract c = contractMapper.selectActive(creator, LocalDateTime.now());
+            if (c != null) return ResourceRules.resolveSharePct(c.getRatePct(), sharePct);
+        } catch (Exception e) {
+            log.warn("签约比例查询失败（降级全局默认 {}%）: creator={} err={}", sharePct, creator, e.getMessage());
+        }
+        return ResourceRules.resolveSharePct(null, sharePct);
     }
 
     // ---------- 创作者（docs/26 §6：上传走既有 admin 上架审核流 + 收益查询） ----------
@@ -307,6 +322,50 @@ public class ResourceService {
                 new LambdaQueryWrapper<CreatorSettlement>()
                         .eq(CreatorSettlement::getCreatorUserId, uid)
                         .orderByDesc(CreatorSettlement::getId));
+    }
+
+    // ---------- 创作者签约合同（T-26f 收尾，docs/26 §6：主体/比例/结算周期） ----------
+
+    /** 签约（admin）：新建生效合同，比例覆盖全局默认 */
+    public Map<String, Object> createContract(CreatorContract c) {
+        if (c.getCreatorUserId() == null || c.getSubject() == null || c.getSubject().isBlank()) {
+            throw new BizException(Result.BAD_REQUEST, "创作者与签约主体必填");
+        }
+        try {
+            ResourceRules.validateContractRate(c.getRatePct());
+        } catch (IllegalArgumentException e) {
+            throw new BizException(Result.BAD_REQUEST, e.getMessage());
+        }
+        if (c.getSettleCycle() == null || c.getSettleCycle().isBlank()) c.setSettleCycle(ResourceRules.SETTLE_MONTHLY);
+        c.setId(null);
+        c.setStatus(ResourceRules.CONTRACT_ACTIVE);
+        if (c.getStartAt() == null) c.setStartAt(LocalDateTime.now());
+        c.setCreatedAt(LocalDateTime.now());
+        contractMapper.insert(c);
+        log.info("创作者签约: creator={} subject={} rate={}%", c.getCreatorUserId(), c.getSubject(), c.getRatePct());
+        return Map.of("id", c.getId(), "status", c.getStatus());
+    }
+
+    /** 合同列表（admin，分页） */
+    public Page<CreatorContract> contracts(long page, long size) {
+        return contractMapper.selectPage(new Page<>(page, Math.min(100, Math.max(1, size))),
+                new LambdaQueryWrapper<CreatorContract>().orderByDesc(CreatorContract::getId));
+    }
+
+    /** 解约（admin）：置 ENDED 并落 end_at（生效判定即失效） */
+    public Map<String, Object> endContract(Long id) {
+        CreatorContract c = contractMapper.selectById(id);
+        if (c == null) throw new BizException(Result.NOT_FOUND, "合同不存在");
+        c.setStatus(ResourceRules.CONTRACT_ENDED);
+        c.setEndAt(LocalDateTime.now());
+        contractMapper.updateById(c);
+        log.info("创作者解约: creator={} contract={}", c.getCreatorUserId(), id);
+        return Map.of("id", c.getId(), "status", c.getStatus());
+    }
+
+    /** 我的生效合同（创作者；无签约返回 null，前端展示默认比例） */
+    public CreatorContract myContract(Long uid) {
+        return contractMapper.selectActive(uid, LocalDateTime.now());
     }
 
     private YearMonth parseMonthOrBad(String month, YearMonth fallback) {

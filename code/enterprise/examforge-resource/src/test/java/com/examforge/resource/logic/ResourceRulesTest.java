@@ -2,6 +2,7 @@ package com.examforge.resource.logic;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -79,5 +80,25 @@ class ResourceRulesTest {
         assertEquals(fb, ResourceRules.parseMonth("  ", fb));
         assertThrows(IllegalArgumentException.class, () -> ResourceRules.parseMonth("2026/09", fb));
         assertThrows(IllegalArgumentException.class, () -> ResourceRules.parseMonth("2026-13", fb));
+    }
+
+    @Test
+    void 签约合同有效期_状态与时间窗判定() {
+        LocalDateTime now = LocalDateTime.of(2026, 9, 29, 12, 0);
+        assertTrue(ResourceRules.contractActive("ACTIVE", null, null, now));                     // 长期有效
+        assertTrue(ResourceRules.contractActive("ACTIVE", now.minusDays(1), null, now));
+        assertTrue(ResourceRules.contractActive("ACTIVE", null, now.plusDays(1), now));
+        assertFalse(ResourceRules.contractActive("ACTIVE", now.plusDays(1), null, now));          // 未生效
+        assertFalse(ResourceRules.contractActive("ACTIVE", null, now, now));                      // 到期边界（end 不含）
+        assertFalse(ResourceRules.contractActive("ENDED", null, null, now));                      // 已解约
+    }
+
+    @Test
+    void 分成比例_签约优先_否则全局_均夹取() {
+        assertEquals(70, ResourceRules.resolveSharePct(70, 50));    // 签约比例覆盖
+        assertEquals(50, ResourceRules.resolveSharePct(null, 50));  // 无签约用全局
+        assertEquals(100, ResourceRules.resolveSharePct(150, 50));  // 签约比例夹取上限
+        assertEquals(0, ResourceRules.resolveSharePct(-10, 50));    // 夹取下限
+        assertEquals(100, ResourceRules.resolveSharePct(null, 180)); // 全局比例夹取上限
     }
 }

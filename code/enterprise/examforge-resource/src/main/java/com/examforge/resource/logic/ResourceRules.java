@@ -1,5 +1,6 @@
 package com.examforge.resource.logic;
 
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.Set;
@@ -16,6 +17,10 @@ public final class ResourceRules {
     public static final String APPEAL_RESOLVED = "RESOLVED";
     public static final String APPEAL_REJECTED = "REJECTED";
     public static final String APPEAL_WITHDRAWN = "WITHDRAWN";
+
+    public static final String SETTLE_MONTHLY = "MONTHLY";
+    public static final String CONTRACT_ACTIVE = "ACTIVE";
+    public static final String CONTRACT_ENDED = "ENDED";
 
     private ResourceRules() { }
 
@@ -75,6 +80,26 @@ public final class ResourceRules {
             return YearMonth.parse(month);
         } catch (DateTimeParseException e) {
             throw new IllegalArgumentException("month 须为 yyyy-MM 格式");
+        }
+    }
+
+    /** 签约合同当前有效：状态 ACTIVE 且在合同期内（start/end 可空=不限） */
+    public static boolean contractActive(String status, LocalDateTime startAt, LocalDateTime endAt, LocalDateTime now) {
+        return CONTRACT_ACTIVE.equals(status)
+                && (startAt == null || !startAt.isAfter(now))
+                && (endAt == null || endAt.isAfter(now));
+    }
+
+    /** 分成比例：签约比例优先，否则全局默认；均夹取 0~100（docs/26 §6 签约比例覆盖） */
+    public static int resolveSharePct(Integer contractRatePct, int globalPct) {
+        int pct = contractRatePct == null ? globalPct : contractRatePct;
+        return Math.min(100, Math.max(0, pct));
+    }
+
+    /** 签约合同参数校验：比例必填且 0~100 */
+    public static void validateContractRate(Integer ratePct) {
+        if (ratePct == null || ratePct < 0 || ratePct > 100) {
+            throw new IllegalArgumentException("签约分成比例须在 0~100 之间");
         }
     }
 }
