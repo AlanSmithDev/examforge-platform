@@ -91,6 +91,16 @@ public class ResourceAdminController {
                 String.valueOf(body.getOrDefault("remark", ""))));
     }
 
+    // ---------- 创作者结算（T-26f P3） ----------
+
+    /** 手动触发月度结算/补发（month=yyyy-MM 缺省上一自然月；与调度任务共用 GET_LOCK 互斥） */
+    @PostMapping("/creator/settle")
+    public Result<Map<String, Object>> settle(@RequestHeader(value = "X-User-Role", required = false) String role,
+                                              @RequestParam(required = false) String month) {
+        requireRole(role);
+        return Result.ok(resourceService.settleMonth(month));
+    }
+
     private void requireRole(String role) {
         if (!"SUPER_ADMIN".equals(role) && !"OP".equals(role) && !"EDITOR".equals(role)) {
             throw new BizException(Result.FORBIDDEN, "无权限");

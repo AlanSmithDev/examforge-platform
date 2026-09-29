@@ -1,5 +1,7 @@
 package com.examforge.resource.logic;
 
+import java.time.YearMonth;
+import java.time.format.DateTimeParseException;
 import java.util.Set;
 
 /** 资源域纯规则：预览页数/下载判价/申诉状态机（docs/26 F-XKW-01/02/14，可脱离 Spring 单测） */
@@ -63,6 +65,16 @@ public final class ResourceRules {
     public static void mustTransition(String from, String to) {
         if (!canTransition(from, to)) {
             throw new IllegalStateException("非法申诉状态跃迁: " + from + " -> " + to);
+        }
+    }
+
+    /** 结算/榜单月份解析：month 须为 yyyy-MM，空则用 fallback；非法格式抛 IllegalArgumentException（docs/26 §6 P3） */
+    public static YearMonth parseMonth(String month, YearMonth fallback) {
+        if (month == null || month.isBlank()) return fallback;
+        try {
+            return YearMonth.parse(month);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("month 须为 yyyy-MM 格式");
         }
     }
 }

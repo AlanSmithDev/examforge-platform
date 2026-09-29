@@ -59,9 +59,23 @@
         <div v-if="earningTotal > earnings.length" style="text-align:center;margin-top:12px">
           <el-pagination layout="prev, pager, next" :total="earningTotal" :page-size="earningSize" :current-page="earningPage" @current-change="p => { earningPage = p; loadEarnings() }" />
         </div>
-        <p class="hint" style="margin-left:0;margin-top:10px;display:block">分成即时入账点数账户（理由码 CREATOR_SHARE，自下载不分成）；月度结算提现为 P3 规划。服务不可用时展示演示数据。</p>
+        <p class="hint" style="margin-left:0;margin-top:10px;display:block">分成即时入账点数账户（理由码 CREATOR_SHARE，自下载不分成）；即时入账失败的流水由月度结算任务按自然月补发（理由码 CREATOR_SETTLE）。服务不可用时展示演示数据。</p>
       </section>
     </div>
+
+    <section class="panel" style="margin-top:16px">
+      <h2>月度结算 <span class="hint">即时入账失败的流水按自然月聚合补发，每月 1 日 03:00 自动执行（docs/26 §6 P3）</span></h2>
+      <el-table v-if="settlements.length" :data="settlements" size="small">
+        <el-table-column label="结算月" width="110"><template #default="{ row }">{{ row.month }}</template></el-table-column>
+        <el-table-column label="补发分成" width="170"><template #default="{ row }"><b style="color:var(--primary)">{{ row.shareCents }} 点 ≈ ¥{{ (row.shareCents / 100).toFixed(2) }}</b></template></el-table-column>
+        <el-table-column prop="rowCount" label="覆盖流水笔数" width="120" />
+        <el-table-column label="入账时间"><template #default="{ row }">{{ (row.creditedAt || '').replace('T', ' ') }}</template></el-table-column>
+      </el-table>
+      <el-empty v-else description="暂无结算记录：分成即时入账成功则不产生结算单" />
+      <div v-if="settlementTotal > settlements.length" style="text-align:center;margin-top:12px">
+        <el-pagination layout="prev, pager, next" :total="settlementTotal" :page-size="settlementSize" :current-page="settlementPage" @current-change="p => { settlementPage = p; loadSettlements() }" />
+      </div>
+    </section>
 
     <section class="panel" style="margin-top:16px">
       <h2>月收入榜 TOP20</h2>
@@ -72,7 +86,7 @@
         <el-table-column prop="downloads" label="计费下载笔数" width="130" />
       </el-table>
       <el-empty v-else description="本月暂无分成记录：等待创作者资源被点数下载" />
-      <p class="hint" style="margin-left:0;display:block;margin-top:8px">按自然月聚合分成流水（docs/26 §6 月收入榜）；展示创作者#ID，接真实昵称为后续增强。</p>
+      <p class="hint" style="margin-left:0;display:block;margin-top:8px">按自然月聚合分成流水（docs/26 §6 月收入榜），昵称经 user 服务补齐，服务不可用降级创作者#ID。</p>
     </section>
   </div>
 </template>
@@ -95,8 +109,9 @@ const priceYuan = ref(2)
 const uploading = ref(false)
 const earnings = ref([]), earningTotal = ref(0), totalShare = ref(0), earningPage = ref(1), earningSize = 10
 const board = ref([])
+const settlements = ref([]), settlementTotal = ref(0), settlementPage = ref(1), settlementSize = 10
 
-onMounted(() => { loadEarnings(); loadBoard() })
+onMounted(() => { loadEarnings(); loadBoard(); loadSettlements() })
 
 async function loadBoard() {
   try {
@@ -119,6 +134,15 @@ async function loadEarnings() {
     demoMode.value = true
     earnings.value = [{ id: 1, resourceId: 9001, amountCents: 200, shareCents: 100, ratePct: 50, createdAt: '2026-09-29T10:00:00' }]
     earningTotal.value = 1; totalShare.value = 100
+  }
+}
+
+async function loadSettlements() {
+  try {
+    const p = await http.get('/resources/creator/settlements', { params: { page: settlementPage.value, size: settlementSize } })
+    settlements.value = p.records || []; settlementTotal.value = Number(p.total || 0)
+  } catch {
+    settlements.value = []; settlementTotal.value = 0
   }
 }
 

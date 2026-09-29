@@ -2,9 +2,11 @@ package com.examforge.resource.logic;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.YearMonth;
+
 import static org.junit.jupiter.api.Assertions.*;
 
-/** 资源域纯逻辑单测（预览 33% / 判价 / 申诉状态机，docs/26 F-XKW-01/02/14 验收） */
+/** 资源域纯逻辑单测（预览 33% / 判价 / 申诉状态机 / 结算月份解析，docs/26 F-XKW-01/02/14 验收） */
 class ResourceRulesTest {
 
     @Test
@@ -66,5 +68,16 @@ class ResourceRulesTest {
         assertFalse(ResourceRules.canTransition("WITHDRAWN", "RESOLVED"));
         assertThrows(IllegalStateException.class, () -> ResourceRules.mustTransition("RESOLVED", "RESOLVED"));
         assertDoesNotThrow(() -> ResourceRules.mustTransition("OPEN", "RESOLVED"));
+    }
+
+    @Test
+    void 结算月份解析_空用fallback_非法抛出() {
+        YearMonth fb = YearMonth.of(2026, 8);
+        assertEquals(YearMonth.of(2026, 9), ResourceRules.parseMonth("2026-09", fb));
+        assertEquals(fb, ResourceRules.parseMonth(null, fb));      // 调度器缺省路径
+        assertEquals(fb, ResourceRules.parseMonth("", fb));
+        assertEquals(fb, ResourceRules.parseMonth("  ", fb));
+        assertThrows(IllegalArgumentException.class, () -> ResourceRules.parseMonth("2026/09", fb));
+        assertThrows(IllegalArgumentException.class, () -> ResourceRules.parseMonth("2026-13", fb));
     }
 }

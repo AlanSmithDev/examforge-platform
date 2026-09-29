@@ -1,6 +1,8 @@
 package com.examforge.resource.controller;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.examforge.common.web.Result;
+import com.examforge.resource.domain.CreatorSettlement;
 import com.examforge.resource.domain.ResourceItem;
 import com.examforge.resource.service.ResourceService;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/** 创作者中心（docs/26 §6：上传→待审→上架→下载计费→分成入账；月度结算提现为 P3） */
+/** 创作者中心（docs/26 §6：上传→待审→上架→下载计费→分成入账→P3 月度结算补发） */
 @RestController
 @RequestMapping("/api/v1/resources/creator")
 @RequiredArgsConstructor
@@ -37,5 +39,13 @@ public class CreatorResourceController {
     public Result<List<Map<String, Object>>> board(@RequestParam(required = false) String month,
                                                    @RequestParam(required = false) Integer limit) {
         return Result.ok(resourceService.monthBoard(month, limit));
+    }
+
+    /** 结算记录（P3：即时入账失败行由月度结算补发，此处展示历史结算单） */
+    @GetMapping("/settlements")
+    public Result<Page<CreatorSettlement>> settlements(@RequestHeader("X-User-Id") String uid,
+                                                       @RequestParam(defaultValue = "1") long page,
+                                                       @RequestParam(defaultValue = "20") long size) {
+        return Result.ok(resourceService.settlements(Long.valueOf(uid), page, size));
     }
 }

@@ -1,6 +1,7 @@
 package com.examforge.resource.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.examforge.api.feign.TradeClient;
 import com.examforge.api.feign.UserStatsClient;
@@ -8,12 +9,14 @@ import com.examforge.common.web.GlobalExceptionHandler.BizException;
 import com.examforge.common.web.Result;
 import com.examforge.resource.domain.CopyrightAppeal;
 import com.examforge.resource.domain.CreatorEarning;
+import com.examforge.resource.domain.CreatorSettlement;
 import com.examforge.resource.domain.ResourceBasket;
 import com.examforge.resource.domain.ResourceDownload;
 import com.examforge.resource.domain.ResourceItem;
 import com.examforge.resource.logic.ResourceRules;
 import com.examforge.resource.mapper.CopyrightAppealMapper;
 import com.examforge.resource.mapper.CreatorEarningMapper;
+import com.examforge.resource.mapper.CreatorSettlementMapper;
 import com.examforge.resource.mapper.ResourceBasketMapper;
 import com.examforge.resource.mapper.ResourceDownloadMapper;
 import com.examforge.resource.mapper.ResourceItemMapper;
@@ -21,17 +24,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.YearMonth;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** 资源中心核心服务（docs/26 F-XKW-01/02/03/14） */
+/** 资源中心核心服务（docs/26 F-XKW-01/02/03/14 + T-26f P3 月度结算） */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -42,8 +45,10 @@ public class ResourceService {
     private final ResourceDownloadMapper downloadMapper;
     private final CopyrightAppealMapper appealMapper;
     private final CreatorEarningMapper earningMapper;
+    private final CreatorSettlementMapper settlementMapper;
     private final TradeClient tradeClient;
     private final UserStatsClient userClient;
+    private final JdbcTemplate jdbcTemplate;
 
     /** 创作者分成比例%（运营可配，docs/26 §6） */
     @Value("${examforge.resource.share-pct:50}")
@@ -159,13 +164,17 @@ public class ResourceService {
         e.setAmountCents(charged);
         e.setShareCents(share);
         e.setRatePct(sharePct);
+        e.setCreditStatus(0);   // 先记待结算，入账成功置 1（失败由月度结算补发，docs/26 §6 P3）
         e.setCreatedAt(LocalDateTime.now());
         earningMapper.insert(e);
         try {
             tradeClient.credit(String.valueOf(creator),
                     Map.of("points", share, "reason", "CREATOR_SHARE", "ref", String.valueOf(r.getId())));
+            earningMapper.update(null, new LambdaUpdateWrapper<CreatorEarning>()
+                    .eq(CreatorEarning::getId, e.getId())
+                    .set(CreatorEarning::getCreditStatus, 1));
         } catch (Exception ex) {
-            // 入账失败不阻断下载：账本已留痕，月度结算（P3）以账本为准补发
+            // 入账失败不阻断下载：账本行保持待结算（credit_status=0），月度结算任务按自然月聚合补发
             log.warn("创作者分成入账失败（账本已留痕待补发）: creator={} share={} err={}", creator, share, ex.getMessage());
         }
     }
@@ -209,12 +218,7 @@ public class ResourceService {
 
     /** 月收入榜（docs/26 §6 月收入榜 TOP20 公开展示）：按自然月聚合分成，month 缺省当月；昵称经 user 服务补齐，失败降级 #ID */
     public List<Map<String, Object>> monthBoard(String month, Integer limit) {
-        YearMonth ym;
-        try {
-            ym = (month == null || month.isBlank()) ? YearMonth.now() : YearMonth.parse(month);
-        } catch (DateTimeParseException e) {
-            throw new BizException(Result.BAD_REQUEST, "month 须为 yyyy-MM 格式");
-        }
+        YearMonth ym = parseMonthOrBad(month, YearMonth.now());
         int top = Math.min(20, Math.max(1, limit == null ? 20 : limit));
         List<Map<String, Object>> rows = earningMapper.monthBoard(
                 ym.atDay(1).atStartOfDay(), ym.plusMonths(1).atDay(1).atStartOfDay(), top);
@@ -232,6 +236,85 @@ public class ResourceService {
                     "downloads", ((Number) r.get("cnt")).intValue()));
         }
         return out;
+    }
+
+    // ---------- 创作者月度结算/补发（T-26f P3，docs/26 §6：结算周期 + 失败补发） ----------
+
+    /**
+     * 月度结算：把窗口内即时入账失败（credit_status=0）的账本行按创作者聚合补发。
+     * 顺序：先落结算单（status=0）并原子标记账本行（移出待结算池）→ 调 trade 入账 → 回填结算单状态；
+     * 入账失败则回滚标记并删结算单，下轮重试。GET_LOCK 保证调度与手动触发并发安全（同 OrderTimeoutScheduler）。
+     */
+    public Map<String, Object> settleMonth(String month) {
+        YearMonth ym = parseMonthOrBad(month, YearMonth.now().minusMonths(1));
+        String monthStr = ym.toString();
+        LocalDateTime start = ym.atDay(1).atStartOfDay();
+        LocalDateTime end = ym.plusMonths(1).atDay(1).atStartOfDay();
+        Boolean locked = jdbcTemplate.queryForObject("SELECT GET_LOCK('examforge:creator-settle', 0)", Boolean.class);
+        if (!Boolean.TRUE.equals(locked)) return Map.of("month", monthStr, "skipped", "其他实例正在结算");
+        try {
+            List<Long> creators = settlementMapper.unsettledCreators(start, end);
+            int settled = 0, failed = 0;
+            long totalCents = 0;
+            for (Long uid : creators) {
+                long sum = settlementMapper.sumUnsettled(uid, start, end);
+                if (sum <= 0) continue;   // 无待补发金额（理论不可达，防御）
+                CreatorSettlement s = new CreatorSettlement();
+                s.setCreatorUserId(uid);
+                s.setMonth(monthStr);
+                s.setShareCents((int) sum);
+                s.setRowCount(settlementMapper.countUnsettled(uid, start, end));
+                s.setStatus(0);
+                s.setCreatedAt(LocalDateTime.now());
+                settlementMapper.insert(s);
+                markSettled(uid, start, end, s.getId());
+                try {
+                    tradeClient.credit(String.valueOf(uid),
+                            Map.of("points", (int) sum, "reason", "CREATOR_SETTLE", "ref", "settle:" + monthStr));
+                    s.setStatus(1);
+                    s.setCreditedAt(LocalDateTime.now());
+                    settlementMapper.updateById(s);
+                    settled++;
+                    totalCents += sum;
+                    log.info("创作者分成补发: creator={} month={} cents={} rows={}", uid, monthStr, sum, s.getRowCount());
+                } catch (Exception ex) {
+                    jdbcTemplate.update("UPDATE creator_earning SET credit_status = 0, settlement_id = NULL WHERE settlement_id = ?", s.getId());
+                    settlementMapper.deleteById(s.getId());
+                    failed++;
+                    log.warn("创作者分成补发失败（下轮重试）: creator={} month={} cents={} err={}", uid, monthStr, sum, ex.getMessage());
+                }
+            }
+            return Map.of("month", monthStr, "creators", settled, "failed", failed, "totalShareCents", totalCents);
+        } finally {
+            jdbcTemplate.queryForObject("SELECT RELEASE_LOCK('examforge:creator-settle')", Boolean.class);
+        }
+    }
+
+    /** 账本行原子移出待结算池并挂结算单（where credit_status=0 保证与并发结算互斥） */
+    private void markSettled(Long uid, LocalDateTime start, LocalDateTime end, Long settlementId) {
+        earningMapper.update(null, new LambdaUpdateWrapper<CreatorEarning>()
+                .eq(CreatorEarning::getCreatorUserId, uid)
+                .eq(CreatorEarning::getCreditStatus, 0)
+                .ge(CreatorEarning::getCreatedAt, start)
+                .lt(CreatorEarning::getCreatedAt, end)
+                .set(CreatorEarning::getCreditStatus, 1)
+                .set(CreatorEarning::getSettlementId, settlementId));
+    }
+
+    /** 创作者结算记录（分页） */
+    public Page<CreatorSettlement> settlements(Long uid, long page, long size) {
+        return settlementMapper.selectPage(new Page<>(page, Math.min(100, Math.max(1, size))),
+                new LambdaQueryWrapper<CreatorSettlement>()
+                        .eq(CreatorSettlement::getCreatorUserId, uid)
+                        .orderByDesc(CreatorSettlement::getId));
+    }
+
+    private YearMonth parseMonthOrBad(String month, YearMonth fallback) {
+        try {
+            return ResourceRules.parseMonth(month, fallback);
+        } catch (IllegalArgumentException e) {
+            throw new BizException(Result.BAD_REQUEST, e.getMessage());
+        }
     }
 
     /** 批量昵称（user 服务不可用时降级为空映射，榜单仍可用） */
