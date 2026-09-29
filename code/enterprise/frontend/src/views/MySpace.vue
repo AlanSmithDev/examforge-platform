@@ -10,6 +10,7 @@
           <div class="cloud-actions">
             <el-button size="small" @click="toggleScope(p)">{{scopeOf(p.id)?'收起范围':'考查范围'}}</el-button>
             <el-button size="small" type="primary" :disabled="p.status!==0" @click="openInsert(p)">插题</el-button>
+            <el-button size="small" type="success" @click="openExport(p)">导出</el-button>
           </div>
         </div>
         <div v-if="scopeOf(p.id)" class="scope-bar">
@@ -22,6 +23,14 @@
           <el-input v-model="insertScore" placeholder="分值（可选）" style="width:120px" size="small" />
           <el-button size="small" type="primary" @click="doInsert(p)">插入</el-button>
           <el-button size="small" @click="inserting=null">取消</el-button>
+        </div>
+        <div v-if="exporting?.id===p.id" class="insert-form">
+          <el-select v-model="exportPaper" size="small" style="width:130px"><el-option label="A4 纵向" value="A4"/><el-option label="A3 纵向" value="A3"/></el-select>
+          <el-select v-model="exportCols" size="small" style="width:100px"><el-option label="单栏" :value="1"/><el-option label="双栏" :value="2"/></el-select>
+          <el-select v-model="exportAns" size="small" style="width:180px"><el-option label="答案随题（教师卷）" value="INLINE"/><el-option label="答案分离末页" value="SEPARATED"/><el-option label="不含答案（学生卷）" value="NONE"/></el-select>
+          <el-button size="small" type="primary" :loading="exportBusy" @click="doExport(p)">导出下载</el-button>
+          <el-button size="small" @click="exporting=null">取消</el-button>
+          <span class="export-hint">A3 双栏自动横向对折排版</span>
         </div>
       </article>
     </el-tab-pane>
@@ -71,7 +80,27 @@ async function doInsert(p){
     loadScope(p.id)
   }catch(_){}
 }
+
+// ---------- 导出版面（docs/22 C6：A4/A3 单双栏 + 答案三模式；下载端点需 JWT，blob 拉取再触发保存） ----------
+const exporting=ref(null),exportPaper=ref('A4'),exportCols=ref(1),exportAns=ref('INLINE'),exportBusy=ref(false)
+function openExport(p){exporting.value=p;exportPaper.value='A4';exportCols.value=1;exportAns.value='INLINE'}
+async function doExport(p){
+  exportBusy.value=true
+  try{
+    const d=await http.post('/papers/'+p.id+'/export',{paper:exportPaper.value,columns:exportCols.value,answerMode:exportAns.value})
+    const raw=await fetch(d.downloadUrl,{headers:{Authorization:'Bearer '+localStorage.getItem('examforge_token')}})
+    if(!raw.ok)throw new Error('下载失败')
+    const a=document.createElement('a')
+    a.href=URL.createObjectURL(await raw.blob())
+    a.download=d.downloadUrl.split('/').pop()
+    a.click();URL.revokeObjectURL(a.href)
+    ElMessage.success('导出成功，已开始下载')
+    exporting.value=null
+  }catch(err){
+    if(err?.response?.status===429)ElMessage.warning(err.response?.data?.message||'点数不足，请充值或升级会员')
+  }finally{exportBusy.value=false}
+}
 </script>
 <style scoped>
-.space-page{max-width:1250px;margin:auto}.space-summary{display:grid;grid-template-columns:repeat(4,1fr);margin:24px 0;border-block:1px solid var(--line);background:white}.space-summary>div{padding:22px}.space-summary span{font-size:12px;color:var(--text-2)}.space-summary strong{display:block;font-size:26px;margin-top:10px}.space-row{display:flex;gap:16px;align-items:center;padding:20px 0;border-bottom:1px solid var(--line)}.space-row>a{flex:1;min-width:0;font-size:13px;color:#415d76;text-decoration:none;overflow-wrap:anywhere;line-height:1.8}.space-row>.el-tag,.space-row>.el-button{flex:none}.draft-info{flex:1;min-width:0}.draft-info strong{font-size:14px;overflow-wrap:anywhere}.draft-info p{font-size:12px;color:var(--text-2)}.tab-actions{margin:15px 0}.cloud-hint{font-size:12px;color:var(--text-2);margin-bottom:12px}.cloud-paper{border:1px solid var(--line);border-radius:8px;background:#fff;padding:16px;margin-bottom:14px}.cloud-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.cloud-actions{display:flex;gap:8px;flex:none}.scope-bar{border-top:1px dashed var(--line);margin-top:12px;padding-top:12px}.insert-form{display:flex;gap:8px;flex-wrap:wrap;border-top:1px dashed var(--line);margin-top:12px;padding-top:12px}@media(max-width:500px){.space-summary>div{padding:16px}.space-row{gap:9px}.cloud-head{flex-wrap:wrap}}
+.space-page{max-width:1250px;margin:auto}.space-summary{display:grid;grid-template-columns:repeat(4,1fr);margin:24px 0;border-block:1px solid var(--line);background:white}.space-summary>div{padding:22px}.space-summary span{font-size:12px;color:var(--text-2)}.space-summary strong{display:block;font-size:26px;margin-top:10px}.space-row{display:flex;gap:16px;align-items:center;padding:20px 0;border-bottom:1px solid var(--line)}.space-row>a{flex:1;min-width:0;font-size:13px;color:#415d76;text-decoration:none;overflow-wrap:anywhere;line-height:1.8}.space-row>.el-tag,.space-row>.el-button{flex:none}.draft-info{flex:1;min-width:0}.draft-info strong{font-size:14px;overflow-wrap:anywhere}.draft-info p{font-size:12px;color:var(--text-2)}.tab-actions{margin:15px 0}.cloud-hint{font-size:12px;color:var(--text-2);margin-bottom:12px}.cloud-paper{border:1px solid var(--line);border-radius:8px;background:#fff;padding:16px;margin-bottom:14px}.cloud-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.cloud-actions{display:flex;gap:8px;flex:none}.scope-bar{border-top:1px dashed var(--line);margin-top:12px;padding-top:12px}.insert-form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--line);margin-top:12px;padding-top:12px}.export-hint{font-size:12px;color:var(--text-2)}@media(max-width:500px){.space-summary>div{padding:16px}.space-row{gap:9px}.cloud-head{flex-wrap:wrap}}
 </style>

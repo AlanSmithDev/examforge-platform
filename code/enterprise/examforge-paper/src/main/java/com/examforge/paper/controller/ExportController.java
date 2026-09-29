@@ -9,16 +9,15 @@ import com.examforge.paper.domain.Paper;
 import com.examforge.paper.domain.PaperQuestion;
 import com.examforge.paper.mapper.PaperMapper;
 import com.examforge.paper.mapper.PaperQuestionMapper;
+import com.examforge.paper.logic.ExportRules;
 import com.examforge.paper.service.ExportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * 导出管线（docs/14 §6 计费闭环）：
@@ -36,7 +35,8 @@ public class ExportController {
     private final TradeClient tradeClient;
 
     @PostMapping("/{id}/export")
-    public Result<Map<String, Object>> export(@RequestHeader("X-User-Id") String uid, @PathVariable Long id) {
+    public Result<Map<String, Object>> export(@RequestHeader("X-User-Id") String uid, @PathVariable Long id,
+                                              @RequestBody(required = false) ExportReq req) {
         Paper paper = paperMapper.selectById(id);
         if (paper == null || !paper.getUserId().equals(Long.valueOf(uid))) {
             return Result.fail(Result.NOT_FOUND, "试卷不存在");
@@ -46,6 +46,9 @@ public class ExportController {
         if (rows.isEmpty()) return Result.fail(Result.BAD_REQUEST, "试卷为空");
 
         String hash = exportService.paperHash(rows.stream().map(PaperQuestion::getQuestionId).toList());
+        // 版面（C6）：不传参数即历史默认 A4 单栏题后随卷；内容指纹不含版面（30 天重复下载口径不变，docs/14 D-1）
+        ExportRules.Layout layout = ExportRules.normalize(
+                req == null ? null : req.paper(), req == null ? null : req.columns(), req == null ? null : req.answerMode());
 
         // 1) 判价
         BillingDTO billing = tradeClient.billing(uid, rows.size(), hash);
@@ -54,29 +57,13 @@ public class ExportController {
             return Result.fail(Result.TOO_MANY, billing.getReason());
         }
 
-        // 3) 生成文件：配置 RENDER_URL（browserless/chromium）时输出 PDF，否则 HTML 兜底
-        String html = exportService.renderHtml(paper.getTitle(), exportService.toItems(rows));
-        String renderUrl = System.getenv("RENDER_URL");
-        boolean pdf = renderUrl != null && !renderUrl.isBlank();
-        String fileName = "paper-" + id + "-" + hash.substring(0, 8) + (pdf ? ".pdf" : ".html");
+        // 3) 生成文件（RENDER_URL 时直出 PDF，否则 HTML 兜底）；文件名带版面标签防不同版面同名互覆
+        String html = exportService.renderHtml(paper.getTitle(), exportService.toItems(rows), layout);
+        String fileName = "paper-" + id + "-" + hash.substring(0, 8) + "-" + ExportRules.fileTag(layout) + ".html";
+        String downloadUrl;
         try {
-            Path dir = Path.of(System.getProperty("java.io.tmpdir"), "examforge-exports");
-            Files.createDirectories(dir);
-            if (pdf) {
-                byte[] pdfBytes = java.net.http.HttpClient.newHttpClient().send(
-                        java.net.http.HttpRequest.newBuilder(URI.create(renderUrl + "/pdf"))
-                                .header("Content-Type", "application/json")
-                                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
-                                        "{\"html\":" + com.fasterxml.jackson.databind.node.TextNode.valueOf(html).toString() + "}"))
-                                .build(),
-                        java.net.http.HttpResponse.BodyHandlers.ofByteArray()).body();
-                Files.write(dir.resolve(fileName), pdfBytes);
-            } else {
-                Files.writeString(dir.resolve(fileName), html);
-            }
-        } catch (BizException e) {
-            throw e;
-        } catch (Exception e) {
+            downloadUrl = exportService.writeArtifact(fileName, html);
+        } catch (IllegalStateException e) {
             throw new BizException(Result.SYSTEM, "导出文件生成失败");
         }
 
@@ -85,14 +72,17 @@ public class ExportController {
                 Map.of("questionCount", rows.size(), "paperHash", hash, "mode", billing.getMode()));
 
         // 5) 下载地址
-        return Result.ok(Map.of("downloadUrl", "/api/v1/papers/export/download/" + fileName,
+        return Result.ok(Map.of("downloadUrl", downloadUrl,
                 "mode", billing.getMode(), "reason", billing.getReason(), "charged", charged));
     }
 
+    /** 导出版面参数（C6，全部可选）：纸张 A4/A3、栏数 1/2、答案模式 INLINE/SEPARATED/NONE */
+    public record ExportReq(String paper, Integer columns, String answerMode) { }
+
     @GetMapping("/export/download/{file}")
     public org.springframework.http.ResponseEntity<byte[]> download(@PathVariable String file) {
-        // paper-{paperId}-{hash8}（试卷导出）与 sheet-{refId}-{hash8}（答题卡，e 卷通二阶段）
-        if (!file.matches("(paper|sheet)-\\d+-[a-f0-9]{8}\\.(html|pdf)")) {
+        // paper-{paperId}-{hash8}[-{版面标签}]（试卷导出，标签 a4c1i 等）与 sheet-{refId}-{hash8}（答题卡，e 卷通二阶段）
+        if (!file.matches("(paper|sheet)-\\d+-[a-f0-9]{8}(?:-[a-z0-9]{2,6})?\\.(html|pdf)")) {
             return org.springframework.http.ResponseEntity.badRequest().build();
         }
         try {

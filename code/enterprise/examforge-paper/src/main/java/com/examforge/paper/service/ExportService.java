@@ -3,6 +3,7 @@ package com.examforge.paper.service;
 import com.examforge.api.dto.QuestionSummaryDTO;
 import com.examforge.api.feign.QuestionClient;
 import com.examforge.paper.domain.PaperQuestion;
+import com.examforge.paper.logic.ExportRules;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -30,9 +31,19 @@ public class ExportService {
         }
     }
 
-    /** 生成 A4 打印就绪 HTML 试卷（含答案分离的教师版） */
+    /** 生成 A4 单栏题后随卷的历史默认版面（存量调用行为不变） */
     public String renderHtml(String title, List<Item> items) {
+        return renderHtml(title, items, ExportRules.normalize(null, null, null));
+    }
+
+    /**
+     * 生成打印就绪 HTML 试卷（docs/22 C6"排版即所得"）：
+     * 版面由 ExportRules.Layout 决定（纸张/单双栏），答案三模式——INLINE 题后随卷、
+     * SEPARATED 末尾独立答案页（另起一页，教师对折阅卷）、NONE 学生卷不含答案。
+     */
+    public String renderHtml(String title, List<Item> items, ExportRules.Layout layout) {
         StringBuilder body = new StringBuilder();
+        StringBuilder answers = new StringBuilder();
         int no = 0;
         for (Item it : items) {
             no++;
@@ -42,9 +53,18 @@ public class ExportService {
             if (q.getOptions() != null && !q.getOptions().isBlank()) {
                 body.append("<div class='opts'>").append(esc(q.getOptions())).append("</div>");
             }
-            body.append("<div class='ans'><b>【答案】</b>").append(esc(q.getAnswer())).append("</div>");
+            if (layout.separated()) {
+                answers.append("<div class='ans'><b>").append(no).append(".（").append(it.score())
+                        .append("分）</b>").append(esc(q.getAnswer())).append("</div>");
+            } else if (!layout.hidden()) {
+                body.append("<div class='ans'><b>【答案】</b>").append(esc(q.getAnswer())).append("</div>");
+            }
             body.append("</div>");
         }
+        if (layout.separated()) {
+            body.append("<section class='ans-page'><h2>参考答案与解析</h2>").append(answers).append("</section>");
+        }
+        String columnsCss = ExportRules.bodyCss(layout);
         return """
                 <!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
                 <title>%s</title>
@@ -53,18 +73,21 @@ public class ExportService {
                 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
                   onload="renderMathInElement(document.body,{delimiters:[{left:'\\\\(',right:'\\\\)',display:false}]});"></script>
                 <style>
-                  @page { size: A4; margin: 18mm 16mm; }
+                  %s
                   body { font-family: "SimSun","Songti SC",serif; font-size: 12pt; color: #000; }
+                  %s
                   h1 { text-align: center; font-size: 16pt; }
                   .q { margin: 10px 0; page-break-inside: avoid; }
                   .no, .stem { display: inline; }
                   .ans { margin-top: 4px; color: #065f46; }
+                  .ans-page { page-break-before: always; }
                   .meta { text-align: center; color: #333; }
                 </style></head><body>
                 <h1>%s</h1><p class="meta">考试时间：120 分钟　满分：%s 分　｜　智卷云 · 下载即所得</p>
                 %s
                 </body></html>
-                """.formatted(esc(title), esc(title), items.stream().mapToInt(Item::score).sum() + "", body);
+                """.formatted(esc(title), ExportRules.pageCss(layout), columnsCss, esc(title),
+                items.stream().mapToInt(Item::score).sum() + "", body);
     }
 
     private String esc(String s) {
