@@ -1,8 +1,11 @@
 package com.examforge.resource.logic;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** 资源域纯规则：预览页数/下载判价/申诉状态机（docs/26 F-XKW-01/02/14，可脱离 Spring 单测） */
@@ -111,5 +114,33 @@ public final class ResourceRules {
         if (ratePct == null || ratePct < 0 || ratePct > 100) {
             throw new IllegalArgumentException("签约分成比例须在 0~100 之间");
         }
+    }
+
+    // ---------- 版权工单 SLA 看板（T-26c 收尾，docs/26 F-XKW-14：异议申诉+下架 SLA） ----------
+
+    /** 工单 SLA 统计输入行 */
+    public record SlaRow(String status, LocalDateTime createdAt, LocalDateTime resolvedAt) { }
+
+    /** 版权工单 SLA 统计：总数/待处理/已处理/平均处理时长(小时)/超时未处理数/超时率%（超时=OPEN 超 slaHours 未处理） */
+    public static Map<String, Object> appealSlaStats(List<SlaRow> rows, LocalDateTime now, int slaHours) {
+        int total = rows.size(), open = 0, closed = 0, overdueOpen = 0, resolveCount = 0;
+        double resolveHoursSum = 0;
+        for (SlaRow r : rows) {
+            if (APPEAL_OPEN.equals(r.status())) {
+                open++;
+                if (r.createdAt() != null && r.createdAt().isBefore(now.minusHours(slaHours))) overdueOpen++;
+            } else {
+                closed++;
+                if (r.resolvedAt() != null && r.createdAt() != null) {
+                    resolveHoursSum += Duration.between(r.createdAt(), r.resolvedAt()).toMinutes() / 60.0;
+                    resolveCount++;
+                }
+            }
+        }
+        double avgResolveHours = resolveCount == 0 ? 0 : Math.round(resolveHoursSum / resolveCount * 10) / 10.0;
+        double overdueRatePct = open == 0 ? 0 : Math.round(overdueOpen * 1000.0 / open) / 10.0;
+        return Map.of("total", total, "open", open, "closed", closed,
+                "avgResolveHours", avgResolveHours, "overdueOpen", overdueOpen,
+                "overdueRatePct", overdueRatePct, "slaHours", slaHours);
     }
 }

@@ -512,6 +512,16 @@ public class ResourceService {
         return Map.of("ok", true, "status", to);
     }
 
+    /** 版权工单 SLA 看板（T-26c 收尾，docs/26 F-XKW-14）：slaHours 缺省 72 */
+    public Map<String, Object> appealSla(Integer slaHours) {
+        int hours = slaHours == null || slaHours < 1 ? 72 : slaHours;
+        List<ResourceRules.SlaRow> rows = appealMapper.selectList(new LambdaQueryWrapper<CopyrightAppeal>()
+                        .orderByAsc(CopyrightAppeal::getCreatedAt)).stream()
+                .map(a -> new ResourceRules.SlaRow(a.getStatus(), a.getCreatedAt(), a.getResolvedAt()))
+                .toList();
+        return ResourceRules.appealSlaStats(rows, LocalDateTime.now(), hours);
+    }
+
     private void validateTarget(String targetType) {
         if (!"RESOURCE".equals(targetType) && !"QUESTION".equals(targetType) && !"PAPER".equals(targetType)) {
             throw new BizException(Result.BAD_REQUEST, "targetType 须为 RESOURCE/QUESTION/PAPER");

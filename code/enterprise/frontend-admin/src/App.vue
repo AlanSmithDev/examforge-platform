@@ -250,6 +250,16 @@
       <!-- 版权工单 -->
       <div v-if="pane === 'copyright'">
         <h2>版权异议 / 申诉工单（异议 → 下架复核；docs/26 F-XKW-14）</h2>
+        <el-descriptions :column="6" border size="small" style="margin-bottom:14px">
+          <el-descriptions-item label="工单总数">{{ sla.total ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="待处理">{{ sla.open ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="已处理">{{ sla.closed ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="平均处理时长">{{ sla.avgResolveHours ?? '-' }} 小时</el-descriptions-item>
+          <el-descriptions-item label="超时未处理">
+            <span :style="(sla.overdueOpen || 0) > 0 ? 'color:#dc2626;font-weight:700' : ''">{{ sla.overdueOpen ?? '-' }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="超时率">{{ sla.overdueRatePct ?? '-' }}%（SLA {{ sla.slaHours ?? 72 }}h）</el-descriptions-item>
+        </el-descriptions>
         <el-radio-group v-model="appealStatus" style="margin-bottom:12px" @change="loadAppeals">
           <el-radio-button value="OPEN">待处理</el-radio-button>
           <el-radio-button value="RESOLVED">已解决</el-radio-button>
@@ -327,7 +337,7 @@ async function login() {
   loadAll()
 }
 function logout() { token.value = ''; localStorage.removeItem('examforge_admin_token') }
-async function loadAll() { loadDash(); loadAds(); loadNotices(); loadAudits(); loadSettings(); loadTemplates(); loadAuditQ(); loadFeedback(); loadRes(); loadAppeals(); loadContracts() }
+async function loadAll() { loadDash(); loadAds(); loadNotices(); loadAudits(); loadSettings(); loadTemplates(); loadAuditQ(); loadFeedback(); loadRes(); loadAppeals(); loadSla(); loadContracts() }
 
 // ---- 创作者签约（examforge-resource /api/v1/resources/admin/creator）----
 async function loadContracts() { contracts.value = (await http.get('/resources/admin/creator/contracts', { params: { page: 1, size: 30 } })).records }
@@ -352,11 +362,13 @@ async function setRes(row, status) {
   loadRes()
 }
 // ---- 版权工单 ----
+const sla = ref({})
+async function loadSla() { try { sla.value = await http.get('/resources/admin/appeals/sla') } catch { sla.value = {} } }
 async function loadAppeals() { appeals.value = (await http.get('/resources/admin/appeals', { params: { status: appealStatus.value, page: 1, size: 30 } })).records }
 async function handleAppeal(row, action) {
   await http.put('/resources/admin/appeals/' + row.id + '/handle', { action, remark: row._remark || '' })
   ElMessage.success(action === 'RESOLVE' ? '已解决' : '已驳回')
-  loadAppeals()
+  loadAppeals(); loadSla()
 }
 async function loadFeedback() { feedbacks.value = (await http.get('/questions/admin/feedback', { params: { status: fbStatus.value, pageSize: 30 } })).list }
 async function resolveFb(row, adopt) {

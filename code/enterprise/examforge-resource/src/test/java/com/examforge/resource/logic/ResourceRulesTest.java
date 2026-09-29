@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -110,5 +111,34 @@ class ResourceRulesTest {
         assertEquals(ResourceRules.BasketMode.OWNED, ResourceRules.basketMode("BOUTIQUE", true, true));  // 已购不再计费
         assertEquals(ResourceRules.BasketMode.FREE, ResourceRules.basketMode("FREE", false, true));
         assertEquals(ResourceRules.BasketMode.POINTS, ResourceRules.basketMode("SPECIAL", false, true));
+    }
+
+    @Test
+    void 版权工单SLA_空数据全零() {
+        var s = ResourceRules.appealSlaStats(List.of(), LocalDateTime.of(2026, 9, 29, 12, 0), 72);
+        assertEquals(0, s.get("total"));
+        assertEquals(0, s.get("open"));
+        assertEquals(0, s.get("closed"));
+        assertEquals(0.0, s.get("avgResolveHours"));
+        assertEquals(0, s.get("overdueOpen"));
+        assertEquals(0.0, s.get("overdueRatePct"));
+    }
+
+    @Test
+    void 版权工单SLA_超时未处理与平均处理时长() {
+        LocalDateTime now = LocalDateTime.of(2026, 9, 29, 12, 0);
+        List<ResourceRules.SlaRow> rows = List.of(
+                new ResourceRules.SlaRow("OPEN", now.minusHours(100), null),                 // 超时（>72h）
+                new ResourceRules.SlaRow("OPEN", now.minusHours(10), null),                  // 未超时
+                new ResourceRules.SlaRow("RESOLVED", now.minusHours(48), now.minusHours(24)), // 处理时长 24h
+                new ResourceRules.SlaRow("REJECTED", now.minusHours(30), now.minusHours(6))); // 处理时长 24h
+        var s = ResourceRules.appealSlaStats(rows, now, 72);
+        assertEquals(4, s.get("total"));
+        assertEquals(2, s.get("open"));
+        assertEquals(2, s.get("closed"));
+        assertEquals(24.0, s.get("avgResolveHours"));
+        assertEquals(1, s.get("overdueOpen"));
+        assertEquals(50.0, s.get("overdueRatePct"));
+        assertEquals(72, s.get("slaHours"));
     }
 }

@@ -92,6 +92,14 @@ public class ResourceAdminController {
                 String.valueOf(body.getOrDefault("remark", ""))));
     }
 
+    /** 版权工单 SLA 看板（T-26c 收尾，docs/26 F-XKW-14）：slaHours 缺省 72 */
+    @GetMapping("/appeals/sla")
+    public Result<Map<String, Object>> appealSla(@RequestHeader(value = "X-User-Role", required = false) String role,
+                                                 @RequestParam(required = false) Integer slaHours) {
+        requireRole(role);
+        return Result.ok(resourceService.appealSla(slaHours));
+    }
+
     // ---------- 创作者结算（T-26f P3） ----------
 
     /** 手动触发月度结算/补发（month=yyyy-MM 缺省上一自然月；与调度任务共用 GET_LOCK 互斥） */
