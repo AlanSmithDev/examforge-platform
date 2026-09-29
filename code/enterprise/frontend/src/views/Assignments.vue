@@ -101,9 +101,25 @@
         <span style="font-size:12px">#{{ s.id }} · {{ s.fileName }} · {{ (s.sizeBytes / 1024).toFixed(0) }}KB · {{ s.status }}</span>
         <el-button size="small" text type="primary" @click="previewScan(s)">预览</el-button>
         <el-button v-if="s.status === 'UPLOADED'" size="small" type="primary" plain @click="aiRecognize(s)">AI 识别</el-button>
-        <el-button v-if="s.status === 'UPLOADED'" size="small" @click="recognize(s)">人工转录确认</el-button>
+        <el-button v-if="s.status === 'UPLOADED'" size="small" @click="openTranscribe(s)">转录导入</el-button>
+        <el-button v-if="s.status === 'RECOGNIZED'" size="small" type="success" @click="importScan(s)">导入落账</el-button>
+        <el-button v-if="s.status === 'RECOGNIZED'" size="small" @click="openTranscribe(s)">修正导入</el-button>
       </div>
     </el-drawer>
+
+    <el-dialog v-model="transcribeVisible"
+               :title="(transcribeScan && transcribeScan.status === 'RECOGNIZED' ? '修正识别结果 · #' : '人工转录 · #') + (transcribeScan ? transcribeScan.id : '')"
+               width="min(540px,94vw)">
+      <p style="font-size:12px;color:var(--text-2);margin:0 0 8px">
+        每行一条：<b>题目ID=学生作答</b>。本作业题目ID：{{ scanRow ? scanRow.questionIds : '' }}。
+        提交后客观题自动判分，解答题转待人工批改。
+      </p>
+      <el-input v-model="transcribeText" type="textarea" :rows="6" placeholder="101=A&#10;102=对&#10;103=对顶角相等" />
+      <template #footer>
+        <el-button @click="transcribeVisible = false">取消</el-button>
+        <el-button type="primary" :loading="busyTranscribe" @click="submitTranscribe">提交并导入落账</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -175,8 +191,9 @@ async function makeSheet(row) {
   ElMessage.success(`答题卡已生成（${d.format}，${d.questionCount} 题）`)
 }
 
-// ---- 扫描阅卷（扫描件=批改证据层，docs/26 §7；OCR 为 P3 AI 视觉钩子）----
+// ---- 扫描阅卷（扫描件=批改证据层 + 识别结果导入落账，docs/26 §7 二阶段）----
 const scanVisible = ref(false), scanRow = ref(null), scanRoster = ref([]), scanList = ref([])
+const transcribeVisible = ref(false), transcribeScan = ref(null), transcribeText = ref(''), busyTranscribe = ref(false)
 async function openScans(row) {
   scanRow.value = row
   scanVisible.value = true
@@ -202,19 +219,46 @@ async function previewScan(s) {
   window.open(URL.createObjectURL(await raw.blob()))
 }
 async function aiRecognize(s) {
-  // P3 钩子：MOCK 渠道返回未识别→降级人工转录；配置 OPENAI_COMPAT 视觉模型后自动识别
+  // MOCK 渠道返回未识别→降级转录导入；配置 OPENAI_COMPAT 视觉模型后自动识别
   const r = await http.post('/assignments/' + scanRow.value.id + '/scans/' + s.id + '/ai-recognize')
   if (r.recognized) {
-    ElMessage.success(`AI 已识别 ${r.answers.length} 题作答，写入待批`)
+    ElMessage.success(`AI 已识别 ${r.answers.length} 题作答，可导入落账`)
   } else {
     ElMessage.warning(r.reason || 'AI 未能识别，请人工转录')
   }
   loadScans(s.studentId)
 }
-async function recognize(s) {
-  await http.post('/assignments/' + scanRow.value.id + '/scans/' + s.id + '/recognize', { ocrJson: '[]' })
-  ElMessage.success('已确认转录完成')
+async function importScan(s) {
+  const r = await http.post('/assignments/' + scanRow.value.id + '/scans/' + s.id + '/import', {})
+  ElMessage.success(`已导入 ${r.imported} 题：客观题对 ${r.correctObjective}、待人工 ${r.pendingManual}${r.graded ? '，已全部批改 ✓' : ''}`)
   loadScans(s.studentId)
+  scanRoster.value = await http.get('/assignments/' + scanRow.value.id + '/students')
+}
+function openTranscribe(s) { transcribeScan.value = s; transcribeText.value = ''; transcribeVisible.value = true }
+async function submitTranscribe() {
+  const answers = []
+  for (const l of transcribeText.value.split(/\n+/).map(x => x.trim()).filter(Boolean)) {
+    const m = l.split(/[=：:]/)
+    if (!m[0] || !Number(m[0]) || m.length < 2) { ElMessage.warning('格式：题目ID=作答，如 101=A'); return }
+    answers.push({ questionId: Number(m[0]), answer: m.slice(1).join('=') })
+  }
+  if (!answers.length) { ElMessage.warning('请至少录入一条作答'); return }
+  busyTranscribe.value = true
+  try {
+    const json = JSON.stringify(answers)
+    const scan = transcribeScan.value
+    if (scan.status === 'UPLOADED') {
+      // 人工转录：先落 RECOGNIZED（原文字符串体），再导入落账
+      await http.post('/assignments/' + scanRow.value.id + '/scans/' + scan.id + '/recognize', json,
+        { headers: { 'Content-Type': 'text/plain' } })
+    }
+    const r = await http.post('/assignments/' + scanRow.value.id + '/scans/' + scan.id + '/import',
+      scan.status === 'RECOGNIZED' ? { ocrJson: json } : {})
+    transcribeVisible.value = false
+    ElMessage.success(`已导入 ${r.imported} 题：客观题对 ${r.correctObjective}、待人工 ${r.pendingManual}${r.graded ? '，已全部批改 ✓' : ''}`)
+    loadScans(scan.studentId)
+    scanRoster.value = await http.get('/assignments/' + scanRow.value.id + '/students')
+  } finally { busyTranscribe.value = false }
 }
 </script>
 
