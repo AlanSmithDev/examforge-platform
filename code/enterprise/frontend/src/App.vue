@@ -16,12 +16,12 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { House, Search, Document, DocumentChecked, Files, CircleCheck, Collection, Notebook, MagicStick, CreditCard, EditPen, User, ShoppingCart, Delete, Menu } from '@element-plus/icons-vue'
+import { House, Search, Document, DocumentChecked, Files, CircleCheck, Collection, Notebook, MagicStick, CreditCard, EditPen, User, ShoppingCart, Delete, Menu, Coin } from '@element-plus/icons-vue'
 import http from './api/request'
 import { useWorkspace } from './composables/workspace'
 const route=useRoute(), user=ref(null), basketOpen=ref(false), mobileNav=ref(false)
 const {basket,removeQuestion}=useWorkspace()
-const navGroups=[{label:'选题与组卷',items:[{path:'/',title:'工作台',icon:House},{path:'/questions',title:'题库选题',icon:Search},{path:'/paper-library',title:'试卷选题',icon:Files},{path:'/papers',title:'组卷工作台',icon:Document},{path:'/assignments',title:'作业管理',icon:DocumentChecked},{path:'/practice',title:'练习与错题',icon:CircleCheck}]},{label:'教学与服务',items:[{path:'/resources',title:'教学资源',icon:Collection},{path:'/my-assignments',title:'我的作业',icon:Notebook},{path:'/figures',title:'数学图形',icon:EditPen},{path:'/aisearch',title:'AI 教研助手',icon:MagicStick},{path:'/vip',title:'会员与点数',icon:CreditCard},{path:'/me',title:'个人空间',icon:User}]}]
+const navGroups=[{label:'选题与组卷',items:[{path:'/',title:'工作台',icon:House},{path:'/questions',title:'题库选题',icon:Search},{path:'/paper-library',title:'试卷选题',icon:Files},{path:'/papers',title:'组卷工作台',icon:Document},{path:'/assignments',title:'作业管理',icon:DocumentChecked},{path:'/practice',title:'练习与错题',icon:CircleCheck}]},{label:'教学与服务',items:[{path:'/resources',title:'教学资源',icon:Collection},{path:'/my-assignments',title:'我的作业',icon:Notebook},{path:'/figures',title:'数学图形',icon:EditPen},{path:'/aisearch',title:'AI 教研助手',icon:MagicStick},{path:'/vip',title:'会员与点数',icon:CreditCard},{path:'/creator',title:'创作者中心',icon:Coin},{path:'/me',title:'个人空间',icon:User}]}]
 const pageTitle=computed(()=>navGroups.flatMap(g=>g.items).find(item=>item.path===route.path)?.title||(route.path==='/login'?'账号登录':'题目详情'))
 function isActive(path){return path==='/'?route.path==='/':route.path===path||(path==='/questions'&&route.path.startsWith('/questions/'))}
 async function syncUser(){if(!localStorage.getItem('examforge_token')){user.value=null;return}try{user.value=await http.get('/auth/me')}catch{user.value=null}}

@@ -1,0 +1,115 @@
+<template>
+  <div class="creator-page">
+    <header><h1 class="page-title">创作者中心</h1><p class="page-subtitle">上传资源 → 管理员审核上架 → 他人点数下载 → 分成自动入账（docs/26 §6）</p></header>
+
+    <div class="creator-grid">
+      <section class="panel">
+        <h2>上传资源</h2>
+        <el-form label-width="78px" label-position="left">
+          <el-form-item label="标题" required>
+            <el-input v-model="form.title" maxlength="200" placeholder="如：2.3 匀变速直线运动位移关系课件（人教A版2019）" />
+          </el-form-item>
+          <el-form-item label="学段/学科" required>
+            <el-select v-model="form.stage" style="width:110px"><el-option v-for="(n,i) in stageNames" :key="i" :label="n" :value="i+1" /></el-select>
+            <el-select v-model="form.subject" style="width:110px;margin-left:8px"><el-option v-for="s in subjects" :key="s" :label="s" :value="s" /></el-select>
+          </el-form-item>
+          <el-form-item label="类别/格式" required>
+            <el-select v-model="form.category" style="width:130px"><el-option v-for="c in categories" :key="c" :label="c" :value="c" /></el-select>
+            <el-select v-model="form.format" style="width:100px;margin-left:8px"><el-option v-for="f in formats" :key="f" :label="f" :value="f" /></el-select>
+          </el-form-item>
+          <el-form-item label="等级">
+            <el-select v-model="form.level">
+              <el-option label="免费 FREE" value="FREE" /><el-option label="普通 NORMAL" value="NORMAL" />
+              <el-option label="特供 SPECIAL" value="SPECIAL" /><el-option label="精品 BOUTIQUE" value="BOUTIQUE" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="定价（元）">
+            <el-input-number v-model="priceYuan" :min="0" :max="1000" :precision="2" :step="0.5" :disabled="form.level === 'FREE'" />
+            <span class="hint">{{ form.level === 'FREE' ? '免费资源价格必须为 0' : '他人下载时按点数扣取，1 元 = 100 点' }}</span>
+          </el-form-item>
+          <el-form-item label="页数">
+            <el-input-number v-model="form.pages" :min="0" :max="2000" />
+            <span class="hint">免费预览按 33% 计（至少 1 页）</span>
+          </el-form-item>
+          <el-form-item label="文件键">
+            <el-input v-model="form.fileKey" placeholder="seed/xxx.pptx（演示环境占位，OSS 接入前可留空）" />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="uploading" @click="upload">提交审核</el-button>
+            <span class="hint">提交后进入待审（status=0），超管端「资源审核」上架后即可被下载并产生分成</span>
+          </el-form-item>
+        </el-form>
+      </section>
+
+      <section class="panel">
+        <h2>分成收益</h2>
+        <div class="earning-summary">
+          <div><small>累计分成</small><b>{{ totalShare }}</b><em>点 ≈ ¥{{ (totalShare / 100).toFixed(2) }}</em></div>
+          <div><small>分成笔数</small><b>{{ earningTotal }}</b></div>
+          <div><small>记账比例</small><b>{{ demoMode ? '50%' : '流水内快照' }}</b></div>
+        </div>
+        <el-table v-if="earnings.length" :data="earnings" size="small" style="margin-top:12px">
+          <el-table-column label="资源" width="76"><template #default="{ row }">#{{ row.resourceId }}</template></el-table-column>
+          <el-table-column label="下载实收" width="90"><template #default="{ row }">{{ row.amountCents }} 点</template></el-table-column>
+          <el-table-column label="我的分成" width="90"><template #default="{ row }"><b style="color:var(--primary)">{{ row.shareCents }} 点</b></template></el-table-column>
+          <el-table-column prop="ratePct" label="比例" width="70"><template #default="{ row }">{{ row.ratePct }}%</template></el-table-column>
+          <el-table-column label="时间"><template #default="{ row }">{{ (row.createdAt || '').replace('T', ' ') }}</template></el-table-column>
+        </el-table>
+        <el-empty v-if="!earnings.length" description="暂无分成流水：资源被他人点数下载后自动入账" />
+        <div v-if="earningTotal > earnings.length" style="text-align:center;margin-top:12px">
+          <el-pagination layout="prev, pager, next" :total="earningTotal" :page-size="earningSize" :current-page="earningPage" @current-change="p => { earningPage = p; loadEarnings() }" />
+        </div>
+        <p class="hint" style="margin-left:0;margin-top:10px;display:block">分成即时入账点数账户（理由码 CREATOR_SHARE，自下载不分成）；月度结算提现为 P3 规划。服务不可用时展示演示数据。</p>
+      </section>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import http from '../api/request'
+
+const router = useRouter()
+const stageNames = ['小学', '初中', '高中', '大学', '考研', '中职']
+const subjects = ['数学', '语文', '英语', '物理', '化学', '生物', '历史', '地理', '政治']
+const categories = ['PPT课件', '教案', '学案', '作业', '试卷', '题集', '素材', '示范课']
+const formats = ['pptx', 'docx', 'pdf', 'zip', 'mp4']
+
+const demoMode = ref(false)
+const form = ref({ title: '', stage: 3, subject: '数学', category: 'PPT课件', format: 'pptx', pages: 12, level: 'NORMAL', fileKey: '' })
+const priceYuan = ref(2)
+const uploading = ref(false)
+const earnings = ref([]), earningTotal = ref(0), totalShare = ref(0), earningPage = ref(1), earningSize = 10
+
+onMounted(loadEarnings)
+
+async function loadEarnings() {
+  try {
+    const d = await http.get('/resources/creator/earnings', { params: { page: earningPage.value, size: earningSize } })
+    earnings.value = d.items || []; earningTotal.value = Number(d.total || 0)
+    totalShare.value = Number(d.totalShareCents || 0); demoMode.value = false
+  } catch {
+    demoMode.value = true
+    earnings.value = [{ id: 1, resourceId: 9001, amountCents: 200, shareCents: 100, ratePct: 50, createdAt: '2026-09-29T10:00:00' }]
+    earningTotal.value = 1; totalShare.value = 100
+  }
+}
+
+async function upload() {
+  if (!localStorage.getItem('examforge_token')) { ElMessage.warning('请先登录'); router.push('/login'); return }
+  const f = form.value
+  if (!f.title || !f.stage || !f.category) { ElMessage.warning('标题/学段/类别必填'); return }
+  uploading.value = true
+  try {
+    await http.post('/resources/creator/upload', { ...f, priceCents: f.level === 'FREE' ? 0 : Math.round(priceYuan.value * 100) })
+    ElMessage.success('已提交，待管理员审核通过后上架')
+    form.value = { title: '', stage: 3, subject: '数学', category: 'PPT课件', format: 'pptx', pages: 12, level: 'NORMAL', fileKey: '' }
+  } finally { uploading.value = false }
+}
+</script>
+
+<style scoped>
+.creator-page{max-width:1350px;margin:auto}.creator-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px;align-items:start}.panel{background:#fff;border:1px solid var(--line);border-radius:8px;padding:18px}.panel h2{font-size:15px;margin-bottom:14px}.hint{font-size:11px;color:#9ba8b6;margin-left:10px}.earning-summary{display:flex;gap:26px;border-bottom:1px solid var(--line);padding-bottom:14px}.earning-summary small{display:block;font-size:11px;color:#9ba8b6}.earning-summary b{font-size:20px}.earning-summary em{font-style:normal;font-size:11px;color:#9ba8b6;margin-left:6px}@media(max-width:1000px){.creator-grid{grid-template-columns:1fr}}
+</style>

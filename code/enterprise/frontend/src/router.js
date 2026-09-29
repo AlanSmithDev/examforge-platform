@@ -14,6 +14,7 @@ export default createRouter({
     { path: '/practice', component: () => import('./views/Practice.vue') },
     { path: '/aisearch', component: () => import('./views/AiSearch.vue') },
     { path: '/resources', component: () => import('./views/Resources.vue') },
+    { path: '/creator', component: () => import('./views/CreatorCenter.vue') },
     { path: '/me', component: () => import('./views/MySpace.vue') },
     { path: '/figures', component: () => import('./views/FigureEditor.vue') },
     { path: '/paper-library', component: () => import('./views/PaperLibrary.vue') },
