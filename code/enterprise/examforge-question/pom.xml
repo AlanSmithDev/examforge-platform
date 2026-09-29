@@ -24,6 +24,26 @@
       <artifactId>mysql-connector-j</artifactId>
       <scope>runtime</scope>
     </dependency>
+    <!-- G2 分表（docs/27 §9.2）：JDBC 驱动模式接入，默认 profile 不加载（见 application-sharding.yml）；
+         5.5.0 兼容 Boot 3.2 的 SnakeYAML 2.x -->
+    <dependency>
+      <groupId>org.apache.shardingsphere</groupId>
+      <artifactId>shardingsphere-jdbc</artifactId>
+      <version>5.5.0</version>
+      <exclusions>
+        <!-- 5.5.0 已知打包缺陷：test-util 误声明为 compile 依赖且未发布到中央仓库，运行时不需要 -->
+        <exclusion>
+          <groupId>org.apache.shardingsphere</groupId>
+          <artifactId>shardingsphere-test-util</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <!-- ShardingSphere Standalone JDBC 元数据仓库的默认存储引擎（仅 sharding profile 运行时使用） -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>runtime</scope>
+    </dependency>
     <dependency>
       <groupId>com.examforge</groupId>
       <artifactId>examforge-common</artifactId>

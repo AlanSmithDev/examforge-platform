@@ -52,7 +52,11 @@ services:
 
   question:
     build: { context: .., dockerfile: docker/Dockerfile, args: { MODULE: examforge-question } }
-    environment: *dbenv
+    environment:
+      <<: *dbenv
+      # G2 分表开关：先执行 sql/13_sharding.sql（建分表+迁移+对账+RENAME），
+      # 再设 QUESTION_PROFILE=sharding 并重启本服务（docs/27 §9.2；默认空=单表，CI/开发零影响）
+      SPRING_PROFILES_ACTIVE: ${QUESTION_PROFILE:-}
     depends_on:
       mysql: { condition: service_healthy }
 
