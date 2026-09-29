@@ -65,6 +65,40 @@ public class OpenAiCompatProvider implements AiProvider {
         }
     }
 
+    /** 视觉输入：多模态消息（text + image_url base64 data URL），供答题卡 OCR 等任务（docs/26 §7） */
+    @Override
+    public String chatVision(String system, String user, String imageBase64, String mime) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new BizException(Result.BAD_REQUEST, "未配置 AI_API_KEY");
+        }
+        String body = """
+                {"model":"%s","messages":[
+                  {"role":"system","content":"%s"},
+                  {"role":"user","content":[
+                    {"type":"text","text":"%s"},
+                    {"type":"image_url","image_url":{"url":"data:%s;base64,%s"}}]}],
+                 "temperature":0.2}
+                """.formatted(model, esc(system), esc(user), mime, imageBase64);
+        try {
+            // 视觉推理较文本慢，超时下限 30s
+            HttpRequest req = HttpRequest.newBuilder(URI.create(baseUrl + "/chat/completions"))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .timeout(Duration.ofSeconds(Math.max(timeoutSeconds, 30)))
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() >= 300) {
+                throw new BizException(Result.SYSTEM, "AI 上游错误 " + resp.statusCode());
+            }
+            return extractContent(resp.body());
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(Result.SYSTEM, "AI 视觉调用失败：" + e.getMessage());
+        }
+    }
+
     /** 轻量解析 choices[0].message.content（避免引 JSON 库） */
     private String extractContent(String resp) {
         int i = resp.indexOf("\"content\":\"");

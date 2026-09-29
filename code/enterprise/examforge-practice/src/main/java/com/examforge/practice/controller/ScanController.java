@@ -58,4 +58,11 @@ public class ScanController {
                                                  @RequestBody(required = false) String ocrJson) {
         return Result.ok(scanService.recognize(Long.valueOf(uid), id, scanId, ocrJson));
     }
+
+    /** AI 视觉识别（识别成功自动置 RECOGNIZED 并写入 ocr_json；未识别保持人工转录流程） */
+    @PostMapping("/{id}/scans/{scanId}/ai-recognize")
+    public Result<Map<String, Object>> aiRecognize(@RequestHeader("X-User-Id") String uid, @PathVariable Long id,
+                                                   @PathVariable Long scanId) {
+        return Result.ok(scanService.recognizeByAi(Long.valueOf(uid), id, scanId));
+    }
 }

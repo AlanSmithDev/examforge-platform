@@ -20,6 +20,8 @@ spring:
             url: ${QUESTION_URL:http://localhost:8102}
           examforge-paper:
             url: ${PAPER_URL:http://localhost:8103}
+          examforge-ai:
+            url: ${AI_URL:http://localhost:8107}
 
 mybatis-plus:
   configuration:

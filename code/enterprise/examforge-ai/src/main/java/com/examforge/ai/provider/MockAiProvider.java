@@ -25,4 +25,10 @@ public class MockAiProvider implements AiProvider {
 
     @Override
     public String name() { return "MOCK"; }
+
+    /** MOCK 无视觉能力：显式返回未识别结构，前端降级为人工转录（docs/26 §7 P3 钩子） */
+    @Override
+    public String chatVision(String system, String user, String imageBase64, String mime) {
+        return "{\"recognized\":false,\"reason\":\"MOCK Provider 无视觉能力，请人工转录\",\"answers\":[]}";
+    }
 }

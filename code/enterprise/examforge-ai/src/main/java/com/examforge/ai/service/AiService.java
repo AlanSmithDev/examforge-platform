@@ -212,6 +212,60 @@ public class AiService {
         return steps;
     }
 
+    /** 扫描件视觉 OCR（e 卷通二阶段 P3 钩子，docs/26 §7）：教师侧低频操作，不占学生 AI 配额 */
+    public Map<String, Object> ocrScan(Long teacherId, String imageBase64, String mime, List<Long> questionIds) {
+        String system = "你是答题卡扫描件识别器。图片中题目按给定顺序排列，提取每题的学生手写作答，" +
+                "严格输出 JSON：{\"recognized\":true,\"answers\":[{\"questionId\":<题目ID>,\"answer\":\"<作答>\"}]}；" +
+                "无法辨认时输出 {\"recognized\":false,\"reason\":\"原因\"}，不要输出 JSON 以外内容。";
+        String user = "题目顺序（questionId）：" + questionIds + "。请按此顺序输出每题的学生作答。";
+        long start = System.currentTimeMillis();
+        boolean degraded = false;
+        String resp;
+        try {
+            resp = provider.chatVision(system, user, imageBase64, mime);
+        } catch (UnsupportedOperationException e) {
+            // MOCK 等无视觉 Provider：显式未识别，前端降级人工转录（流程不断）
+            return Map.of("recognized", false, "degraded", true,
+                    "reason", "当前 AI Provider 不支持视觉识别，请人工转录", "answers", List.of(), "raw", "", "costMs", 0L);
+        } catch (Exception e) {
+            log.warn("AI 视觉主通道失败，降级 MOCK: {}", e.getMessage());
+            try {
+                resp = fallback.chatVision(system, user, imageBase64, mime);
+                degraded = true;
+            } catch (Exception e2) {
+                return Map.of("recognized", false, "degraded", true,
+                        "reason", "AI 视觉通道不可用：" + e2.getMessage(), "answers", List.of(), "raw", "", "costMs", 0L);
+            }
+        }
+        long cost = System.currentTimeMillis() - start;
+        try {
+            AiLog l = new AiLog();
+            l.setUserId(teacherId); l.setScene("OCR_SCAN"); l.setProvider(provider.name());
+            l.setModel(provider.name()); l.setPromptChars(imageBase64.length()); l.setRespChars(resp.length());
+            l.setCostMs((int) cost); l.setDegraded(degraded ? 1 : 0); l.setCreatedAt(LocalDateTime.now());
+            aiLogMapper.insert(l);
+        } catch (Exception ignored) { }
+        Map<String, Object> out = new HashMap<>();
+        out.put("raw", resp); out.put("degraded", degraded); out.put("provider", provider.name()); out.put("costMs", cost);
+        try {
+            var root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(resp);
+            out.put("recognized", root.path("recognized").asBoolean(false));
+            out.put("reason", root.path("reason").asText(""));
+            List<Map<String, Object>> answers = new java.util.ArrayList<>();
+            if (root.has("answers") && root.get("answers").isArray()) {
+                for (var a : root.get("answers")) {
+                    answers.add(Map.of("questionId", a.path("questionId").asLong(),
+                            "answer", a.path("answer").asText()));
+                }
+            }
+            out.put("answers", answers);
+        } catch (Exception e) {
+            out.put("recognized", false); out.put("reason", "AI 返回解析失败");
+            out.put("answers", List.of());
+        }
+        return out;
+    }
+
     private Map<String, Object> run(Long userId, String scene, String system, String user) {
         long start = System.currentTimeMillis();
         boolean degraded = false;

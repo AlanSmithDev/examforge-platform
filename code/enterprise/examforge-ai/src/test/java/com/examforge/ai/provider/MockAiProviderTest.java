@@ -28,4 +28,13 @@ class MockAiProviderTest {
     void 名称标识() {
         assertEquals("MOCK", provider.name());
     }
+
+    @Test
+    void 视觉输入_MOCK显式返回未识别结构() throws Exception {
+        String resp = provider.chatVision("sys", "user", "aGk=", "image/jpeg");
+        var root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(resp);
+        assertFalse(root.path("recognized").asBoolean(true), "MOCK 必须显式返回未识别，驱动人工转录降级");
+        assertTrue(root.path("answers").isArray());
+        assertFalse(root.path("reason").asText().isBlank());
+    }
 }

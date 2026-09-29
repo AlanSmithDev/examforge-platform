@@ -31,6 +31,7 @@ public class ScanService {
     private final AssignmentMapper assignmentMapper;
     private final AssignmentStudentMapper studentMapper;
     private final ScanRecordMapper scanMapper;
+    private final com.examforge.api.feign.OcrClient ocrClient;
 
     private Path baseDir() {
         return Path.of(System.getProperty("java.io.tmpdir"), "examforge-scans");
@@ -125,6 +126,46 @@ public class ScanService {
         r.setOcrJson(ocrJson == null ? "[]" : ocrJson);
         scanMapper.updateById(r);
         return Map.of("ok", true, "status", r.getStatus());
+    }
+
+    /** AI 视觉识别（P3 钩子）：扫描件→base64→AI OCR；未识别时保持 UPLOADED，人工转录流程不断 */
+    public Map<String, Object> recognizeByAi(Long teacherId, Long assignmentId, Long scanId) {
+        Assignment a = owned(teacherId, assignmentId);
+        ScanRecord r = scanMapper.selectById(scanId);
+        if (r == null || !r.getAssignmentId().equals(assignmentId)) {
+            throw new BizException(Result.NOT_FOUND, "扫描件不存在");
+        }
+        try {
+            ScanRules.mustTransition(r.getStatus(), ScanRules.ST_RECOGNIZED);
+        } catch (IllegalStateException e) {
+            throw new BizException(Result.BAD_REQUEST, e.getMessage());
+        }
+        Path p = baseDir().resolve(r.getStoredPath()).normalize();
+        if (!p.startsWith(baseDir())) throw new BizException(Result.BAD_REQUEST, "存储路径非法");
+        byte[] bytes;
+        try {
+            bytes = Files.readAllBytes(p);
+        } catch (Exception e) {
+            throw new BizException(Result.NOT_FOUND, "扫描件文件已丢失");
+        }
+        String b64 = java.util.Base64.getEncoder().encodeToString(bytes);
+        Map<String, Object> out = ocrClient.ocr(Map.of(
+                "userId", String.valueOf(teacherId),
+                "imageBase64", b64,
+                "mime", r.getMime() == null ? "image/jpeg" : r.getMime(),
+                "questionIds", parseQuestionIds(a.getQuestionIds())));
+        if (Boolean.TRUE.equals(out.get("recognized"))) {
+            r.setStatus(ScanRules.ST_RECOGNIZED);
+            r.setOcrJson(String.valueOf(out.get("raw")));
+            scanMapper.updateById(r);
+        }
+        return out;   // recognized=false 时保持 UPLOADED，人工转录流程不断
+    }
+
+    private List<Long> parseQuestionIds(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        return java.util.Arrays.stream(json.replaceAll("[\\[\\] ]", "").split(","))
+                .filter(s -> !s.isBlank()).map(Long::valueOf).toList();
     }
 
     private Assignment owned(Long teacherId, Long assignmentId) {
