@@ -8,6 +8,10 @@ spring:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/examforge_practice?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: ${MYSQL_USER:examforge}
     password: ${MYSQL_PASSWORD:examforge123}
+  servlet:
+    multipart:
+      max-file-size: 10MB      # 扫描件上限（ScanRules.MAX_SIZE_BYTES 同步）
+      max-request-size: 12MB
   cloud:
     openfeign:
       client:
