@@ -66,6 +66,12 @@ public class AssignmentController {
         return Result.ok(assignmentService.classReport(Long.valueOf(uid), id));
     }
 
+    /** 作业答题卡（一键生成：客观题涂卡网格+主观题作答区，docs/26 §7） */
+    @GetMapping("/{id}/answer-sheet")
+    public Result<Map<String, Object>> answerSheet(@RequestHeader("X-User-Id") String uid, @PathVariable Long id) {
+        return Result.ok(assignmentService.answerSheet(Long.valueOf(uid), id));
+    }
+
     /** 批改解答题：{items:[{questionId, correct:"1"/"0", score?}]} */
     @PostMapping("/{id}/students/{studentId}/grade")
     public Result<Map<String, Object>> grade(@RequestHeader("X-User-Id") String uid, @PathVariable Long id,

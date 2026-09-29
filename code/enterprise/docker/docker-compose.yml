@@ -92,6 +92,7 @@ services:
     environment:
       <<: *dbenv
       QUESTION_URL: http://question:8102
+      PAPER_URL: http://paper:8103
     depends_on:
       mysql: { condition: service_healthy }
 

@@ -34,6 +34,7 @@ public class AssignmentService {
     private final AssignmentStudentMapper studentMapper;
     private final AssignmentAnswerMapper answerMapper;
     private final QuestionClient questionClient;
+    private final com.examforge.api.feign.AnswerSheetClient answerSheetClient;
 
     // ---------- 教师侧 ----------
 
@@ -234,8 +235,7 @@ public class AssignmentService {
     }
 
     /** 班级报告：名单概览 + 逐题正确率 + 薄弱知识点（教师视角） */
-    public Map<String, Object> classReport(Long teacherId, Long assignmentId) {
-        Assignment a = owned(teacherId, assignmentId);
+    public Map<String, Object> classReport(Long teacherId, Long assignmentId) {        Assignment a = owned(teacherId, assignmentId);
         List<AssignmentStudent> roster = studentMapper.selectList(new LambdaQueryWrapper<AssignmentStudent>()
                 .eq(AssignmentStudent::getAssignmentId, assignmentId));
         long submitted = roster.stream().filter(r -> r.getStatus() >= AssignmentRules.ST_SUBMITTED).count();
@@ -274,6 +274,15 @@ public class AssignmentService {
                 "roster", roster.size(), "submitted", submitted, "graded", graded,
                 "avgScorePct", Math.round(avgScore * 100) / 100.0,
                 "questionStats", questionStats, "weakKnowledgePoints", weakKp);
+    }
+
+    /** 作业答题卡（e 卷通二阶段）：教师为整卷作业一键生成（题目顺序=布置顺序） */
+    public Map<String, Object> answerSheet(Long teacherId, Long assignmentId) {
+        Assignment a = owned(teacherId, assignmentId);
+        return answerSheetClient.answerSheet(Map.of(
+                "title", a.getTitle(),
+                "refId", String.valueOf(assignmentId),
+                "questionIds", parseQuestionIds(a.getQuestionIds())));
     }
 
     // ---------- 内部 ----------

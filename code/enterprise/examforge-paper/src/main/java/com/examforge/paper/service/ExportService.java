@@ -77,4 +77,34 @@ public class ExportService {
     public List<Item> toItems(List<PaperQuestion> rows) {
         return rows.stream().map(r -> new Item(r.getQuestionId(), r.getScore(), "", null)).toList();
     }
+
+    /**
+     * HTML 落地为可下载产物：配置 RENDER_URL（browserless/chromium）时输出 PDF，否则 HTML 兜底。
+     * 试卷导出与答题卡共用（e 卷通二阶段，docs/26 §7）。
+     * 返回相对下载路径（GET /api/v1/papers/export/download/{file}）。
+     */
+    public String writeArtifact(String fileName, String html) {
+        try {
+            java.nio.file.Path dir = java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "examforge-exports");
+            java.nio.file.Files.createDirectories(dir);
+            String renderUrl = System.getenv("RENDER_URL");
+            boolean pdf = renderUrl != null && !renderUrl.isBlank();
+            java.nio.file.Path target = dir.resolve(pdf ? fileName.replaceAll("\\.html$", ".pdf") : fileName);
+            if (pdf) {
+                byte[] pdfBytes = java.net.http.HttpClient.newHttpClient().send(
+                        java.net.http.HttpRequest.newBuilder(java.net.URI.create(renderUrl + "/pdf"))
+                                .header("Content-Type", "application/json")
+                                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(
+                                        "{\"html\":" + com.fasterxml.jackson.databind.node.TextNode.valueOf(html).toString() + "}"))
+                                .build(),
+                        java.net.http.HttpResponse.BodyHandlers.ofByteArray()).body();
+                java.nio.file.Files.write(target, pdfBytes);
+            } else {
+                java.nio.file.Files.writeString(target, html);
+            }
+            return "/api/v1/papers/export/download/" + target.getFileName();
+        } catch (Exception e) {
+            throw new IllegalStateException("导出文件生成失败: " + e.getMessage(), e);
+        }
+    }
 }

@@ -21,7 +21,7 @@ spring:
           predicates: [ "Path=/api/v1/questions/**,/api/v1/meta/**" ]
         - id: paper
           uri: http://localhost:8103
-          predicates: [ "Path=/api/v1/basket/**,/api/v1/papers/**" ]
+          predicates: [ "Path=/api/v1/basket/**,/api/v1/papers/**,/api/v1/answer-sheet**" ]
         - id: admin
           uri: http://localhost:8104
           predicates: [ "Path=/api/v1/admin/**,/api/v1/ads/**,/api/v1/settings/**,/api/v1/notices/**" ]

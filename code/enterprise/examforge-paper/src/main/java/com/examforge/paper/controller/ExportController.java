@@ -91,15 +91,17 @@ public class ExportController {
 
     @GetMapping("/export/download/{file}")
     public org.springframework.http.ResponseEntity<byte[]> download(@PathVariable String file) {
-        if (!file.matches("paper-\\d+-[a-f0-9]{8}\\.(html|pdf)")) {
+        // paper-{paperId}-{hash8}（试卷导出）与 sheet-{refId}-{hash8}（答题卡，e 卷通二阶段）
+        if (!file.matches("(paper|sheet)-\\d+-[a-f0-9]{8}\\.(html|pdf)")) {
             return org.springframework.http.ResponseEntity.badRequest().build();
         }
         try {
             Path p = Path.of(System.getProperty("java.io.tmpdir"), "examforge-exports", file);
             byte[] body = Files.readAllBytes(p);
+            String type = file.endsWith(".pdf") ? "application/pdf" : "text/html;charset=UTF-8";
             return org.springframework.http.ResponseEntity.ok()
                     .header("Content-Disposition", "attachment; filename=\"" + file + "\"")
-                    .header("Content-Type", "text/html;charset=UTF-8")
+                    .header("Content-Type", type)
                     .body(body);
         } catch (Exception e) {
             return org.springframework.http.ResponseEntity.notFound().build();
