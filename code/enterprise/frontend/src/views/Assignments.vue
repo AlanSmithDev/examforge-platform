@@ -100,7 +100,8 @@
       <div v-for="s in scanList" :key="s.id" style="display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)">
         <span style="font-size:12px">#{{ s.id }} · {{ s.fileName }} · {{ (s.sizeBytes / 1024).toFixed(0) }}KB · {{ s.status }}</span>
         <el-button size="small" text type="primary" @click="previewScan(s)">预览</el-button>
-        <el-button v-if="s.status === 'UPLOADED'" size="small" @click="recognize(s)">确认转录完成</el-button>
+        <el-button v-if="s.status === 'UPLOADED'" size="small" type="primary" plain @click="aiRecognize(s)">AI 识别</el-button>
+        <el-button v-if="s.status === 'UPLOADED'" size="small" @click="recognize(s)">人工转录确认</el-button>
       </div>
     </el-drawer>
   </div>
@@ -200,9 +201,19 @@ async function previewScan(s) {
   if (!raw.ok) { ElMessage.error('预览失败'); return }
   window.open(URL.createObjectURL(await raw.blob()))
 }
+async function aiRecognize(s) {
+  // P3 钩子：MOCK 渠道返回未识别→降级人工转录；配置 OPENAI_COMPAT 视觉模型后自动识别
+  const r = await http.post('/assignments/' + scanRow.value.id + '/scans/' + s.id + '/ai-recognize')
+  if (r.recognized) {
+    ElMessage.success(`AI 已识别 ${r.answers.length} 题作答，写入待批`)
+  } else {
+    ElMessage.warning(r.reason || 'AI 未能识别，请人工转录')
+  }
+  loadScans(s.studentId)
+}
 async function recognize(s) {
   await http.post('/assignments/' + scanRow.value.id + '/scans/' + s.id + '/recognize', { ocrJson: '[]' })
-  ElMessage.success('已确认转录完成（P3 接入 AI 视觉后自动识别）')
+  ElMessage.success('已确认转录完成')
   loadScans(s.studentId)
 }
 </script>
