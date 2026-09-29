@@ -38,8 +38,15 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
             return exchange.getResponse().setComplete();
         }
-        if (whitelist.stream().anyMatch(path::startsWith)) {
-            return chain.filter(exchange);
+        if (whitelist.stream().anyMatch(path::startsWith) || resourcePublicRead(path)) {
+            // 匿名放行：剥离客户端自带身份头（身份只由网关校验 JWT 后注入，防伪造）
+            ServerWebExchange clean = exchange.mutate()
+                    .request(r -> r.headers(h -> {
+                        h.remove("X-User-Id");
+                        h.remove("X-User-Role");
+                        h.remove("X-User-Nickname");
+                    })).build();
+            return chain.filter(clean);
         }
         String auth = exchange.getRequest().getHeaders().getFirst("Authorization");
         if (auth == null || !auth.startsWith("Bearer ")) {
@@ -63,4 +70,9 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() { return -100; }
+
+    /** 资源中心公开读：列表与数字详情匿名可浏览（docs/26 §11）；资源篮/下载/创作者/申诉等其余子路径须登录 */
+    static boolean resourcePublicRead(String path) {
+        return path.equals("/api/v1/resources") || path.matches("/api/v1/resources/\\d+");
+    }
 }

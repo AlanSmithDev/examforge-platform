@@ -50,7 +50,8 @@ examforge:
     - /api/v1/meta
     - /api/v1/questions
     - /api/v1/questions/
-    - /api/v1/resources
+    # /api/v1/resources 前缀不走白名单：列表与数字详情在 AuthGlobalFilter.resourcePublicRead 匿名放行，
+    # 资源篮/下载/创作者/申诉等须登录（JWT 校验后注入 X-User-Id）
     - /api/v1/ads
     - /api/v1/settings
     - /api/v1/notices
