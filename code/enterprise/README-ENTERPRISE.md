@@ -67,6 +67,7 @@ cd frontend-admin && npm i && npm run dev   # http://localhost:5174
 - **操作审计**：管理端全部写操作落 `audit_log`（谁/何时/IP/前后值）。
 - **SSRF 验收条件**：管理端素材 URL 校验仅允许 http/https 且拒绝内网/环回/保留地址（`UrlSafetyChecker`）。
 - **SQL 全参数化**：MyBatis-Plus 全链路参数绑定，无字符串拼接 SQL。
+- **可观测性（G3，docs/19 §5）**：全服务经 examforge-common 传递 actuator+micrometer，`/actuator/prometheus` 内网暴露（不经网关路由）；`docker/prometheus.yml` 抓取全部服务，`prometheus-rules.yml` 按 P0/P1/P2 告警（服务下线 / 5xx 错误率 / 支付成功率<99.9% / 网关 P99 / JVM 堆 / 连接池），Grafana 总览看板自动装配（compose 起 `prometheus:9090` + `grafana:3001`，账号 admin / `GRAFANA_PASSWORD`）；支付回调业务计数器 `examforge_payment_callback_total` 在 trade。**新增服务必须同步 prometheus.yml 抓取 job**（`MonitoringConfigStructureTest` 结构锁强制）。
 
 ## 5. 测试
 - `mvn test`：各服务单测（组卷引擎难度分布/去重断言、题目筛选、JWT 工具）。
