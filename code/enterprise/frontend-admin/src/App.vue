@@ -24,6 +24,7 @@
         <el-menu-item index="auditres">📚 资源审核</el-menu-item>
         <el-menu-item index="contracts">🤝 创作者签约</el-menu-item>
         <el-menu-item index="copyright">⚖️ 版权工单</el-menu-item>
+        <el-menu-item index="schools">🏫 学校订阅</el-menu-item>
         <el-menu-item index="audit">🛡 操作审计</el-menu-item>
       </el-menu>
       <el-button style="margin:14px;width:calc(100% - 28px)" @click="logout">退出</el-button>
@@ -247,6 +248,44 @@
         </el-table>
       </div>
 
+      <!-- 学校订阅 -->
+      <div v-if="pane === 'schools'">
+        <h2>学校订阅（B 端合同开通；订阅期内教师全员享会员权益，docs/26 §7）</h2>
+        <el-card style="margin-bottom:14px">
+          <el-input v-model="schoolForm.name" placeholder="学校名称" style="width:220px;margin-right:8px" />
+          <el-input-number v-model="schoolForm.adminUserId" :min="1" placeholder="校管理员ID" style="width:160px;margin-right:8px" />
+          <el-input-number v-model="schoolForm.seatLimit" :min="0" placeholder="教师席位(0=不限)" style="width:170px;margin-right:8px" />
+          <el-select v-model="schoolForm.months" style="width:110px;margin-right:8px">
+            <el-option label="12 个月" :value="12" /><el-option label="24 个月" :value="24" /><el-option label="36 个月" :value="36" />
+          </el-select>
+          <el-button type="primary" @click="openSchool">合同开通</el-button>
+        </el-card>
+        <el-table :data="schools" size="small">
+          <el-table-column prop="id" label="ID" width="70" />
+          <el-table-column prop="name" label="学校" />
+          <el-table-column prop="adminUserId" label="管理员" width="90" />
+          <el-table-column label="教师/席位" width="110">
+            <template #default="{ row }">{{ row.teachers }} / {{ row.seatLimit < 0 ? '不限' : row.seatLimit }}</template>
+          </el-table-column>
+          <el-table-column prop="memberUntil" label="订阅到期" width="170">
+            <template #default="{ row }">{{ (row.memberUntil || '').replace('T', ' ') }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.active ? 'success' : 'danger'">
+                {{ row.active ? '生效中' : (row.status === 'OPEN' ? '已到期' : '已关闭') }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="170">
+            <template #default="{ row }">
+              <el-button size="small" type="primary" @click="renewSchool(row)">续订12月</el-button>
+              <el-button v-if="row.status === 'OPEN'" size="small" type="danger" @click="closeSchool(row)">关闭</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
       <!-- 版权工单 -->
       <div v-if="pane === 'copyright'">
         <h2>版权异议 / 申诉工单（异议 → 下架复核；docs/26 F-XKW-14）</h2>
@@ -325,6 +364,8 @@ const ads = ref([]), notices = ref([]), audits = ref([]), templates = ref([]), a
 const resources = ref([]), appeals = ref([])
 const contracts = ref([])
 const contractForm = reactive({ creatorUserId: null, subject: '', ratePct: 50 })
+const schools = ref([])
+const schoolForm = reactive({ name: '', adminUserId: null, seatLimit: 0, months: 12 })
 const auditStatus = ref(1), fbStatus = ref(0), resStatus = ref(0), appealStatus = ref('OPEN')
 const tpl = reactive({ name: '', type: 'FULL_REDUCTION', discountCents: 100, minSpendCents: 0, total: 100, perLimit: 1, validDays: 30 })
 const notice = reactive({ title: '', content: '' })
@@ -337,10 +378,24 @@ async function login() {
   loadAll()
 }
 function logout() { token.value = ''; localStorage.removeItem('examforge_admin_token') }
-async function loadAll() { loadDash(); loadAds(); loadNotices(); loadAudits(); loadSettings(); loadTemplates(); loadAuditQ(); loadFeedback(); loadRes(); loadAppeals(); loadSla(); loadContracts() }
+async function loadAll() { loadDash(); loadAds(); loadNotices(); loadAudits(); loadSettings(); loadTemplates(); loadAuditQ(); loadFeedback(); loadRes(); loadAppeals(); loadSla(); loadContracts(); loadSchools() }
 
 // ---- 创作者签约（examforge-resource /api/v1/resources/admin/creator）----
 async function loadContracts() { contracts.value = (await http.get('/resources/admin/creator/contracts', { params: { page: 1, size: 30 } })).records }
+
+// ---- 学校订阅（examforge-school /api/v1/schools/admin，T-26h）----
+async function loadSchools() { schools.value = await http.get('/schools/admin') }
+async function openSchool() {
+  if (!schoolForm.name || !schoolForm.adminUserId) { ElMessage.warning('学校名称与校管理员ID必填'); return }
+  await http.post('/schools/admin', {
+    name: schoolForm.name, adminUserId: schoolForm.adminUserId,
+    seatLimit: schoolForm.seatLimit || undefined, months: schoolForm.months
+  })
+  ElMessage.success('已开通，校管理员可在用户端「我的学校」批量添加成员')
+  loadSchools()
+}
+async function renewSchool(row) { await http.post('/schools/admin/' + row.id + '/renew', { months: 12 }); ElMessage.success('已续订 12 个月'); loadSchools() }
+async function closeSchool(row) { await http.post('/schools/admin/' + row.id + '/close'); loadSchools() }
 async function createContract() {
   if (!contractForm.creatorUserId || !contractForm.subject) { ElMessage.warning('创作者ID与签约主体必填'); return }
   await http.post('/resources/admin/creator/contract', { ...contractForm })

@@ -37,6 +37,7 @@
     <module>examforge-practice</module>
     <module>examforge-ai</module>
     <module>examforge-resource</module>
+    <module>examforge-school</module>
   </modules>
 
   <dependencyManagement>

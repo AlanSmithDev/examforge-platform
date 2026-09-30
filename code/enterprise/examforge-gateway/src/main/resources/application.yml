@@ -34,6 +34,9 @@ spring:
         - id: ai
           uri: http://localhost:8107
           predicates: [ "Path=/api/v1/ai/**" ]
+        - id: school
+          uri: http://localhost:8109
+          predicates: [ "Path=/api/v1/schools/**" ]
         - id: resource
           uri: http://localhost:8108
           predicates: [ "Path=/api/v1/resources/**" ]

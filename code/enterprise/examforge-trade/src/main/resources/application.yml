@@ -11,6 +11,12 @@ spring:
   # 下载计费参数（docs/14 §3 P-3 / §6 D-1）
   examforge:
     free-downloads-per-day: 3
+  cloud:
+    openfeign:
+      client:
+        config:
+          examforge-school:
+            url: ${SCHOOL_URL:http://localhost:8109}   # T-26h 学校权益联动（不可用时 entitlement 降级）
 
 mybatis-plus:
   configuration:

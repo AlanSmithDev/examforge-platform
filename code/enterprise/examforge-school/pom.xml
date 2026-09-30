@@ -8,7 +8,7 @@
     <artifactId>examforge-parent</artifactId>
     <version>1.0.0</version>
   </parent>
-  <artifactId>examforge-trade</artifactId>
+  <artifactId>examforge-school</artifactId>
 
   <dependencies>
     <dependency>
@@ -39,11 +39,6 @@
     <dependency>
       <groupId>com.examforge</groupId>
       <artifactId>examforge-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.h2database</groupId>
-      <artifactId>h2</artifactId>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>

@@ -34,11 +34,24 @@ public class TradeService {
     private final com.examforge.trade.mapper.CdkCodeMapper cdkCodeMapper;
     private final com.examforge.trade.mapper.TaskDefMapper taskDefMapper;
     private final com.examforge.trade.mapper.TaskRecordMapper taskRecordMapper;
+    private final com.examforge.api.feign.SchoolClient schoolClient;
 
     // ---------- M-3 权益判定（全站统一入口） ----------
     public Map<String, Object> entitlement(Long uid) {
         Member m = memberMapper.selectById(uid);
         boolean memberActive = m != null && m.getExpireTime() != null && m.getExpireTime().isAfter(LocalDateTime.now());
+        // 学校订阅维度（T-26h，docs/26 §7"教师全员享权益"）：有效订阅学校的教师视同会员；
+        // school 服务不可用时降级为无学校权益（不影响个人会员路径），fail-open 不阻断权益判定
+        boolean schoolActive = false;
+        String schoolName = "";
+        try {
+            Map<String, Object> sch = schoolClient.membership(uid);
+            schoolActive = Boolean.TRUE.equals(sch.get("active")) && "TEACHER".equals(sch.get("role"));
+            if (schoolActive) schoolName = String.valueOf(sch.get("schoolName"));
+        } catch (Exception e) {
+            log.debug("学校权益查询不可用，按无学校权益处理: {}", e.getMessage());
+        }
+        boolean effectiveMember = memberActive || schoolActive;
         PointAccount acc = pointMapper.selectById(uid);
         int balance = acc == null ? 0 : acc.getBalance();
         long freeUsed = downloadMapper.selectCount(new LambdaQueryWrapper<DownloadRecord>()
@@ -46,10 +59,11 @@ public class TradeService {
                 .eq(DownloadRecord::getCharged, "FREE")
                 .apply("DATE(created_at) = CURDATE()"));
         int freeLeft = Math.max(0, 3 - (int) freeUsed);   // D-1：每日 3 次免费
-        return Map.of("memberActive", memberActive,
+        return Map.of("memberActive", effectiveMember,
                 "plan", memberActive && m != null ? m.getPlanId() : null,
                 "expireTime", memberActive && m != null ? m.getExpireTime() : null,
-                "pointBalance", balance, "freeDownloadsLeft", freeLeft);
+                "pointBalance", balance, "freeDownloadsLeft", freeLeft,
+                "schoolActive", schoolActive, "schoolName", schoolName);
     }
 
     // ---------- O-2 幂等下单 ----------
