@@ -77,12 +77,30 @@
         <el-table-column prop="expireTime" label="有效期至" />
       </el-table>
     </el-card>
+
+    <!-- 渠道支付弹窗（D14：微信扫码 / 支付宝跳转 / 沙箱即时） -->
+    <el-dialog v-model="payOpen" title="订单支付" width="360px" :close-on-click-modal="false" @closed="stopPoll">
+      <div style="text-align:center">
+        <template v-if="payMode === 'QR'">
+          <img v-if="qrData" :src="qrData" alt="微信支付二维码" style="width:240px;height:240px" />
+          <p class="pay-tip">请使用微信扫码支付，支付完成后自动生效</p>
+        </template>
+        <template v-else-if="payMode === 'REDIRECT'">
+          <p class="pay-tip">已跳转支付宝完成支付；若未跳转
+            <el-link type="primary" :href="payUrl" target="_blank">点此前往支付</el-link>
+          </p>
+        </template>
+        <p v-else class="pay-tip">{{ payHint }}</p>
+        <p v-if="payPolling" class="pay-tip">等待支付结果…</p>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import QRCode from 'qrcode'
 import http from '../api/request'
 
 const ent = ref({})
@@ -104,9 +122,58 @@ onMounted(async () => {
 async function buy(p) {
   const d = await http.post('/member/orders', { skuType: 'MEMBER', skuRef: p.planId, quantity: 1 },
     { headers: { 'X-Idempotency-Key': crypto.randomUUID() } })
-  await http.post('/payments/mock-notify', { orderNo: d.orderNo })   // 沙箱支付；生产为微信/支付宝回调
-  ElMessage.success('支付成功（沙箱），会员已生效')
-  ent.value = await http.get('/member/me')
+  await pay(d.orderNo)
+}
+
+// ---------- 渠道支付（D14，docs/14 O-4）：prepay 凭证分流 → 沙箱即时 / 微信扫码轮询 / 支付宝跳转 ----------
+const payOpen = ref(false), payMode = ref('MOCK_NOTIFY'), payUrl = ref(''), payHint = ref(''),
+      qrData = ref(''), payPolling = ref(false), payTimer = ref(null)
+let pollDeadline = 0
+
+async function pay(orderNo) {
+  const d = await http.post('/payments/' + orderNo + '/prepay', {})
+  payOpen.value = true
+  payUrl.value = d.payUrl || ''
+  payHint.value = d.hint || ''
+  if (d.mode === 'QR') {
+    payMode.value = 'QR'
+    qrData.value = await QRCode.toDataURL(d.codeUrl, { width: 240 })
+    startPoll(orderNo)
+  } else if (d.mode === 'REDIRECT') {
+    payMode.value = 'REDIRECT'
+    startPoll(orderNo)
+    if (d.payUrl) window.open(d.payUrl, '_blank')
+  } else {
+    // 沙箱：mock-notify 即时回调（仅 provider=MOCK 可用；生产由渠道回调）
+    await http.post('/payments/mock-notify', { orderNo })
+    payMode.value = 'MOCK_NOTIFY'
+    payHint.value = '支付成功（沙箱），会员已生效'
+    stopPoll()
+    ent.value = await http.get('/member/me')
+  }
+}
+
+function startPoll(orderNo) {
+  stopPoll()
+  payPolling.value = true
+  pollDeadline = Date.now() + 2 * 60 * 1000
+  payTimer.value = setInterval(async () => {
+    if (Date.now() > pollDeadline) { stopPoll(); ElMessage.warning('支付等待超时，支付成功后权益将自动生效'); return }
+    try {
+      const s = await http.get('/payments/' + orderNo + '/status')
+      if (s.status === 'PAID') {
+        stopPoll()
+        payOpen.value = false
+        ElMessage.success('支付成功，会员已生效')
+        ent.value = await http.get('/member/me')
+      }
+    } catch (_) {}
+  }, 2500)
+}
+
+function stopPoll() {
+  if (payTimer.value) { clearInterval(payTimer.value); payTimer.value = null }
+  payPolling.value = false
 }
 async function claim(t) {
   await http.post('/coupons/' + t.id + '/claim')

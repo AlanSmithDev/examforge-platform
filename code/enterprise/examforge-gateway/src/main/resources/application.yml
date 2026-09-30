@@ -59,6 +59,9 @@ examforge:
     - /api/v1/settings
     - /api/v1/notices
     - /api/v1/health
+    # D14 渠道回调（无 JWT，渠道验签为唯一安全边界；MOCK 渠道下两入口由 provider 守卫 403）
+    - /api/v1/payments/wechat/notify
+    - /api/v1/payments/alipay/notify
 
 logging:
   level:
