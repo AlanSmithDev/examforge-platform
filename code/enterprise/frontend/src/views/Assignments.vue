@@ -60,6 +60,21 @@
           <el-descriptions-item label="已批改">{{ report.graded }} 人</el-descriptions-item>
           <el-descriptions-item label="平均正确率">{{ report.avgScorePct }}%</el-descriptions-item>
         </el-descriptions>
+        <h4 style="margin:14px 0 6px">学生名单</h4>
+        <el-table :data="report.rosterRows" size="small" max-height="220">
+          <el-table-column prop="studentId" label="学生ID" width="90" />
+          <el-table-column label="状态" width="80">
+            <template #default="{ row }">{{ ['待完成', '已提交', '已批改'][row.status] }}</template>
+          </el-table-column>
+          <el-table-column prop="score" label="得分%" width="80">
+            <template #default="{ row }">{{ row.score >= 0 ? row.score : '—' }}</template>
+          </el-table-column>
+          <el-table-column label="个体报告" width="90">
+            <template #default="{ row }">
+              <el-button size="small" text type="primary" @click="openStudentReport(row.studentId)">查看</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
         <h4 style="margin:14px 0 6px">薄弱知识点（按错误数）</h4>
         <div>
           <el-tag v-for="k in report.weakKnowledgePoints" :key="k.kp" size="small"
@@ -75,6 +90,43 @@
           <el-table-column prop="wrong" label="错" width="60" />
           <el-table-column prop="pending" label="待批" width="60" />
         </el-table>
+      </template>
+    </el-drawer>
+
+    <el-drawer v-model="studentReportVisible" :title="'学生学情 · #' + (studentReport ? studentReport.studentId : '')" size="min(520px,100vw)">
+      <template v-if="studentReport">
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="参与作业">{{ studentReport.assignments }} 次</el-descriptions-item>
+          <el-descriptions-item label="累计正确率">{{ studentReport.overall.correctRatePct }}%</el-descriptions-item>
+          <el-descriptions-item label="答对 / 答错">{{ studentReport.overall.correct }} / {{ studentReport.overall.wrong }}</el-descriptions-item>
+          <el-descriptions-item label="待批改">{{ studentReport.overall.pending }} 题</el-descriptions-item>
+        </el-descriptions>
+        <h4 style="margin:14px 0 6px">薄弱知识点（按错误数）</h4>
+        <div>
+          <el-tag v-for="k in studentReport.weakKnowledgePoints" :key="k.kp" size="small"
+                  :type="k.correctRatePct < 60 ? 'danger' : 'info'" style="margin:0 6px 6px 0">
+            {{ k.kp }} · 错{{ k.wrong }} · 正确率{{ k.correctRatePct }}%
+          </el-tag>
+          <span v-if="!studentReport.weakKnowledgePoints?.length" style="font-size:12px;color:var(--text-2)">暂无作答数据</span>
+        </div>
+        <h4 style="margin:14px 0 6px">最近作业</h4>
+        <el-table :data="studentReport.trend" size="small">
+          <el-table-column prop="title" label="作业" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="score" label="得分%" width="70">
+            <template #default="{ row }">{{ row.score >= 0 ? row.score : '—' }}</template>
+          </el-table-column>
+          <el-table-column prop="correctRatePct" label="正确率%" width="80">
+            <template #default="{ row }">{{ row.correctRatePct ?? '—' }}</template>
+          </el-table-column>
+        </el-table>
+        <h4 style="margin:14px 0 6px">错题本（未解决 TOP10）</h4>
+        <div>
+          <div v-for="w in studentReport.wrongBook" :key="w.questionId" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px">
+            <router-link :to="'/questions/' + w.questionId">题目 #{{ w.questionId }}</router-link>
+            <span style="font-size:12px;color:var(--text-2)">{{ w.kpNames || '无知识点' }} · 错 {{ w.wrongCount }} 次</span>
+          </div>
+          <span v-if="!studentReport.wrongBook?.length" style="font-size:12px;color:var(--text-2)">错题本已清空</span>
+        </div>
       </template>
     </el-drawer>
 
@@ -134,6 +186,8 @@ const busy = ref(false)
 const mine = ref([])
 const rosterVisible = ref(false), rosterOpen = ref(null), rosterText = ref('')
 const reportVisible = ref(false), report = ref(null)
+// 学生个体学情（考后诊断，docs/26 F-XKW-12）：班级报告名单 → 查看 → 个体报告抽屉
+const studentReportVisible = ref(false), studentReport = ref(null)
 
 onMounted(loadMine)
 
@@ -176,6 +230,12 @@ async function assignRoster() {
 async function openReport(row) {
   report.value = await http.get('/assignments/' + row.id + '/report')
   reportVisible.value = true
+}
+async function openStudentReport(studentId) {
+  try {
+    studentReport.value = await http.get('/assignments/students/' + studentId + '/report')
+    studentReportVisible.value = true
+  } catch (_) {}
 }
 async function makeSheet(row) {
   // 下载端点需要 JWT：用 blob 拉取再触发浏览器保存

@@ -66,6 +66,19 @@ public class AssignmentController {
         return Result.ok(assignmentService.classReport(Long.valueOf(uid), id));
     }
 
+    /** 学生个体学情报告（考后诊断）：教师查学生（须为其任一作业布置者） */
+    @GetMapping("/students/{studentId}/report")
+    public Result<Map<String, Object>> studentReport(@RequestHeader("X-User-Id") String uid,
+                                                     @PathVariable Long studentId) {
+        return Result.ok(assignmentService.studentReport(Long.valueOf(uid), studentId));
+    }
+
+    /** 我的学情（学生自查：跨作业正确率/薄弱知识点/成绩趋势/错题本 TOP） */
+    @GetMapping("/my/report")
+    public Result<Map<String, Object>> myReport(@RequestHeader("X-User-Id") String uid) {
+        return Result.ok(assignmentService.studentReport(Long.valueOf(uid), Long.valueOf(uid)));
+    }
+
     /** 作业答题卡（一键生成：客观题涂卡网格+主观题作答区，docs/26 §7） */
     @GetMapping("/{id}/answer-sheet")
     public Result<Map<String, Object>> answerSheet(@RequestHeader("X-User-Id") String uid, @PathVariable Long id) {
