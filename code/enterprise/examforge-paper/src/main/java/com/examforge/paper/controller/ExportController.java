@@ -46,9 +46,11 @@ public class ExportController {
         if (rows.isEmpty()) return Result.fail(Result.BAD_REQUEST, "试卷为空");
 
         String hash = exportService.paperHash(rows.stream().map(PaperQuestion::getQuestionId).toList());
-        // 版面（C6）：不传参数即历史默认 A4 单栏题后随卷；内容指纹不含版面（30 天重复下载口径不变，docs/14 D-1）
+        // 版面（C6）：不传参数即历史默认 A4 单栏题后随卷；作答区（TJ-111）默认不加；
+        // 内容指纹不含版面/作答区（30 天重复下载口径不变，docs/14 D-1）
         ExportRules.Layout layout = ExportRules.normalize(
                 req == null ? null : req.paper(), req == null ? null : req.columns(), req == null ? null : req.answerMode());
+        String answerSpace = ExportRules.normalizeAnswerSpace(req == null ? null : req.answerSpace());
 
         // 1) 判价
         BillingDTO billing = tradeClient.billing(uid, rows.size(), hash);
@@ -57,9 +59,9 @@ public class ExportController {
             return Result.fail(Result.TOO_MANY, billing.getReason());
         }
 
-        // 3) 生成文件（RENDER_URL 时直出 PDF，否则 HTML 兜底）；文件名带版面标签防不同版面同名互覆
-        String html = exportService.renderHtml(paper.getTitle(), exportService.toItems(rows), layout);
-        String fileName = "paper-" + id + "-" + hash.substring(0, 8) + "-" + ExportRules.fileTag(layout) + ".html";
+        // 3) 生成文件（RENDER_URL 时直出 PDF，否则 HTML 兜底）；文件名带版面/作答区标签防不同版面同名互覆
+        String html = exportService.renderHtml(paper.getTitle(), exportService.toItems(rows), layout, answerSpace);
+        String fileName = "paper-" + id + "-" + hash.substring(0, 8) + "-" + ExportRules.fileTag(layout, answerSpace) + ".html";
         String downloadUrl;
         try {
             downloadUrl = exportService.writeArtifact(fileName, html);
@@ -76,13 +78,13 @@ public class ExportController {
                 "mode", billing.getMode(), "reason", billing.getReason(), "charged", charged));
     }
 
-    /** 导出版面参数（C6，全部可选）：纸张 A4/A3、栏数 1/2、答案模式 INLINE/SEPARATED/NONE */
-    public record ExportReq(String paper, Integer columns, String answerMode) { }
+    /** 导出版面参数（C6/TJ-111，全部可选）：纸张 A4/A3、栏数 1/2、答案模式 INLINE/SEPARATED/NONE、作答区 NONE/LINE/BLANK */
+    public record ExportReq(String paper, Integer columns, String answerMode, String answerSpace) { }
 
     @GetMapping("/export/download/{file}")
     public org.springframework.http.ResponseEntity<byte[]> download(@PathVariable String file) {
-        // paper-{paperId}-{hash8}[-{版面标签}]（试卷导出，标签 a4c1i 等）与 sheet-{refId}-{hash8}（答题卡，e 卷通二阶段）
-        if (!file.matches("(paper|sheet)-\\d+-[a-f0-9]{8}(?:-[a-z0-9]{2,6})?\\.(html|pdf)")) {
+        // paper-{paperId}-{hash8}[-{版面+作答区标签}]（试卷导出，标签 a4c1i / a3c2sln 等）与 sheet-{refId}-{hash8}（答题卡）
+        if (!file.matches("(paper|sheet)-\\d+-[a-f0-9]{8}(?:-[a-z0-9]{2,8})?\\.(html|pdf)")) {
             return org.springframework.http.ResponseEntity.badRequest().build();
         }
         try {

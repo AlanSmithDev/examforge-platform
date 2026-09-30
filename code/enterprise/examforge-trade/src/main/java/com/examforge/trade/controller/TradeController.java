@@ -28,6 +28,7 @@ public class TradeController {
     private final MemberPlanMapper planMapper;
     private final CouponTemplateMapper couponTemplateMapper;
     private final UserCouponMapper userCouponMapper;
+    private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
 
     @Value("${examforge.payment.provider:MOCK}")
     private String paymentProvider;
@@ -62,7 +63,16 @@ public class TradeController {
         if (!"MOCK".equalsIgnoreCase(paymentProvider)) {
             throw new BizException(Result.FORBIDDEN, "当前支付渠道非 MOCK，禁止使用沙箱回调");
         }
-        return Result.ok(tradeService.payNotify(body.get("orderNo")));
+        // 支付回调结果计数（G3 业务指标，docs/19 §5：支付成功率 <99.9% 即 P0）
+        try {
+            Map<String, Object> out = tradeService.payNotify(body.get("orderNo"));
+            meterRegistry.counter("examforge_payment_callback_total", "result",
+                    "PAID".equals(String.valueOf(out.get("status"))) ? "SUCCESS" : "IGNORED").increment();
+            return Result.ok(out);
+        } catch (BizException e) {
+            meterRegistry.counter("examforge_payment_callback_total", "result", "FAIL").increment();
+            throw e;
+        }
     }
 
     @GetMapping("/coupons/available")

@@ -71,4 +71,25 @@ class ExportRulesTest {
                         ExportRules.normalize("A3", 1, "NONE"))
                 .map(ExportRules::fileTag).distinct().count());
     }
+
+    @Test
+    void 作答区归一化与CSS() {
+        assertEquals("NONE", ExportRules.normalizeAnswerSpace(null));
+        assertEquals("NONE", ExportRules.normalizeAnswerSpace("box"));
+        assertEquals("LINE", ExportRules.normalizeAnswerSpace(" line "));
+        assertEquals("BLANK", ExportRules.normalizeAnswerSpace("BLANK"));
+        assertEquals("", ExportRules.answerSpaceCss("NONE"), "默认不加作答区样式（历史默认输出不变）");
+        assertTrue(ExportRules.answerSpaceCss("LINE").contains("border-bottom"), "横线行作答区");
+        assertTrue(ExportRules.answerSpaceCss("BLANK").contains("min-height: 30mm"), "空白框作答区");
+    }
+
+    @Test
+    void 文件名标签_作答区后缀_默认不变() {
+        // 不传作答区（或 NONE）→ 标签与 C6 逐字一致
+        assertEquals("a4c1i", ExportRules.fileTag(ExportRules.normalize(null, null, null), null));
+        assertEquals("a4c1i", ExportRules.fileTag(ExportRules.normalize(null, null, null), "NONE"));
+        // 横线/空白框后缀：仍为 [a-z0-9] 且长度 ≤8（下载白名单兼容）
+        assertEquals("a3c2sln", ExportRules.fileTag(ExportRules.normalize("A3", 2, "SEPARATED"), "LINE"));
+        assertEquals("a4c2nbk", ExportRules.fileTag(ExportRules.normalize(null, 2, "NONE"), "BLANK"));
+    }
 }

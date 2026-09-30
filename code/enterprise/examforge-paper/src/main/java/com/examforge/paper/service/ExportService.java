@@ -33,15 +33,17 @@ public class ExportService {
 
     /** 生成 A4 单栏题后随卷的历史默认版面（存量调用行为不变） */
     public String renderHtml(String title, List<Item> items) {
-        return renderHtml(title, items, ExportRules.normalize(null, null, null));
+        return renderHtml(title, items, ExportRules.normalize(null, null, null), ExportRules.AS_NONE);
     }
 
     /**
      * 生成打印就绪 HTML 试卷（docs/22 C6"排版即所得"）：
      * 版面由 ExportRules.Layout 决定（纸张/单双栏），答案三模式——INLINE 题后随卷、
-     * SEPARATED 末尾独立答案页（另起一页，教师对折阅卷）、NONE 学生卷不含答案。
+     * SEPARATED 末尾独立答案页（另起一页，教师对折阅卷）、NONE 学生卷不含答案；
+     * answerSpace（docs/25 TJ-111）：LINE 题后答题横线 / BLANK 作答空白框，供学生卷书写。
      */
-    public String renderHtml(String title, List<Item> items, ExportRules.Layout layout) {
+    public String renderHtml(String title, List<Item> items, ExportRules.Layout layout, String answerSpace) {
+        String as = ExportRules.normalizeAnswerSpace(answerSpace);
         StringBuilder body = new StringBuilder();
         StringBuilder answers = new StringBuilder();
         int no = 0;
@@ -52,6 +54,9 @@ public class ExportService {
                     .append("分）</div><div class='stem'>").append(esc(q.getStem())).append("</div>");
             if (q.getOptions() != null && !q.getOptions().isBlank()) {
                 body.append("<div class='opts'>").append(esc(q.getOptions())).append("</div>");
+            }
+            if (!ExportRules.AS_NONE.equals(as)) {
+                body.append("<div class='aspace'></div>");
             }
             if (layout.separated()) {
                 answers.append("<div class='ans'><b>").append(no).append(".（").append(it.score())
@@ -65,6 +70,7 @@ public class ExportService {
             body.append("<section class='ans-page'><h2>参考答案与解析</h2>").append(answers).append("</section>");
         }
         String columnsCss = ExportRules.bodyCss(layout);
+        String aspaceCss = ExportRules.answerSpaceCss(as);
         return """
                 <!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
                 <title>%s</title>
@@ -76,6 +82,7 @@ public class ExportService {
                   %s
                   body { font-family: "SimSun","Songti SC",serif; font-size: 12pt; color: #000; }
                   %s
+                  %s
                   h1 { text-align: center; font-size: 16pt; }
                   .q { margin: 10px 0; page-break-inside: avoid; }
                   .no, .stem { display: inline; }
@@ -86,8 +93,13 @@ public class ExportService {
                 <h1>%s</h1><p class="meta">考试时间：120 分钟　满分：%s 分　｜　智卷云 · 下载即所得</p>
                 %s
                 </body></html>
-                """.formatted(esc(title), ExportRules.pageCss(layout), columnsCss, esc(title),
+                """.formatted(esc(title), ExportRules.pageCss(layout), columnsCss, aspaceCss, esc(title),
                 items.stream().mapToInt(Item::score).sum() + "", body);
+    }
+
+    /** 三参重载（不含作答区）：C6 存量契约保持 */
+    public String renderHtml(String title, List<Item> items, ExportRules.Layout layout) {
+        return renderHtml(title, items, layout, ExportRules.AS_NONE);
     }
 
     private String esc(String s) {
