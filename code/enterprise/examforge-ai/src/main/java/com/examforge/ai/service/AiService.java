@@ -1,6 +1,7 @@
 package com.examforge.ai.service;
 
 import com.examforge.ai.domain.AiLog;
+import com.examforge.ai.logic.PhotoSearchRules;
 import com.examforge.ai.mapper.AiLogMapper;
 import com.examforge.ai.provider.AiProvider;
 import com.examforge.common.web.Result;
@@ -137,8 +138,18 @@ public class AiService {
         Long subjectId = parsed.get("subjectId") == null ? null : Long.valueOf(String.valueOf(parsed.get("subjectId")));
         String type = parsed.get("type") == null || "null".equals(parsed.get("type")) ? null : String.valueOf(parsed.get("type"));
         Integer difficulty = parsed.get("difficulty") == null ? null : Integer.valueOf(String.valueOf(parsed.get("difficulty")));
+        List<Map<String, Object>> items = toCards(questionClient.searchInternal(keyword, subjectId, type, difficulty, 10));
+        Map<String, Object> out = new java.util.HashMap<>();
+        out.put("parsed", parsed);
+        out.put("count", items.size());
+        out.put("list", items);
+        return out;
+    }
+
+    /** 检索结果 → 前端题目卡片（aiSearch 与 photoSearch 共用，docs/16 S-2 字段契约） */
+    private List<Map<String, Object>> toCards(List<com.examforge.api.dto.QuestionSummaryDTO> qs) {
         List<Map<String, Object>> items = new java.util.ArrayList<>();
-        for (var q : questionClient.searchInternal(keyword, subjectId, type, difficulty, 10)) {
+        for (var q : qs) {
             Map<String, Object> m = new java.util.HashMap<>();
             m.put("id", q.getId());
             m.put("type", q.getType() == null ? "" : q.getType());
@@ -148,10 +159,105 @@ public class AiService {
             m.put("stem", q.getStem() == null ? "" : q.getStem());
             items.add(m);
         }
+        return items;
+    }
+
+    /**
+     * C7 拍照搜题（docs/23 §3A）：拍照 → AI 视觉提取题干 → 关键词检索 → 匹配度重排。
+     * 与文本 AI 搜不同：每次调用含一次视觉模型调用，计 AI 配额并落 ai_log（scene=PHOTO_SEARCH）。
+     * 降级链（docs/23 §3A S-3）：Provider 无视觉/识别失败 → 有 hint 走文本规则解析检索；无 hint 返回引导文案。
+     */
+    public Map<String, Object> photoSearch(Long userId, String imageBase64, String mime, String hint) {
+        checkQuota(userId);
+        String invalid = PhotoSearchRules.validateImage(imageBase64, mime);
+        if (invalid != null) {
+            throw new com.examforge.common.web.GlobalExceptionHandler.BizException(Result.BAD_REQUEST, invalid);
+        }
+        String b64 = PhotoSearchRules.stripDataUrl(imageBase64);
+        String normMime = PhotoSearchRules.resolveMime(mime, imageBase64);
+
+        // 视觉提取题干（提示词含"题干"标记，MOCK Provider 据此返回确定性伪题干保证链路可离线演示）
+        String system = "你是题目图片识别器。从照片中提取题目题干文本（保留 \\\\( \\\\)/\\\\[ \\\\] LaTeX 定界符），" +
+                "严格输出 JSON：{\"recognized\":true,\"stem\":\"<题干文本>\"}；" +
+                "无法辨认时输出 {\"recognized\":false,\"reason\":\"原因\"}，不要输出 JSON 以外内容。";
+        long start = System.currentTimeMillis();
+        boolean degraded = false;
+        String visionJson = null;
+        String visionFail = "";
+        try {
+            visionJson = provider.chatVision(system, "请识别图片中的题目题干。", b64, normMime);
+        } catch (UnsupportedOperationException e) {
+            visionFail = "当前 AI Provider 不支持视觉识别";
+        } catch (Exception e) {
+            log.warn("AI 视觉主通道失败，降级 MOCK: {}", e.getMessage());
+            try {
+                visionJson = fallback.chatVision(system, "请识别图片中的题目题干。", b64, normMime);
+                degraded = true;
+            } catch (Exception e2) {
+                visionFail = "AI 视觉通道不可用：" + e2.getMessage();
+            }
+        }
+        long cost = System.currentTimeMillis() - start;
+
+        boolean recognized = false;
+        String stem = null;
+        String visionReason = visionFail;
+        if (visionJson != null) {
+            try {
+                var root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(visionJson);
+                recognized = root.path("recognized").asBoolean(false);
+                stem = root.path("stem").asText(null);
+                if (!recognized) visionReason = root.path("reason").asText("未能识别图片中的题目");
+            } catch (Exception e) {
+                visionReason = "AI 返回解析失败";
+            }
+        }
+
         Map<String, Object> out = new java.util.HashMap<>();
-        out.put("parsed", parsed);
-        out.put("count", items.size());
-        out.put("list", items);
+        out.put("provider", provider.name());
+        out.put("degraded", degraded);
+        out.put("costMs", cost);
+        List<String> keywords = new java.util.ArrayList<>();
+        List<Map<String, Object>> list = new java.util.ArrayList<>();
+        if (recognized && stem != null && !stem.isBlank()) {
+            // 主链路：题干 → 关键词 → 逐词检索（最多前 3 词，首个非空即止）→ 匹配度重排
+            keywords = PhotoSearchRules.extractKeywords(stem);
+            for (String kw : keywords.subList(0, Math.min(3, keywords.size()))) {
+                list = toCards(questionClient.searchInternal(kw, null, null, null, 10));
+                if (!list.isEmpty()) break;
+            }
+            list = PhotoSearchRules.rerank(list, keywords);
+            out.put("recognized", true);
+            out.put("stem", stem);
+        } else if (nvl(hint).isBlank()) {
+            // 降级①：视觉不可用且无文字补充 → 引导文案（流程不断）
+            out.put("recognized", false);
+            out.put("reason", visionReason == null || visionReason.isBlank() ? "未能识别图片中的题目" : visionReason);
+        } else {
+            // 降级②：有文字补充 → 文本规则解析检索（docs/23 S-3 兜底口径）
+            Map<String, Object> parsed = ruleParse(hint);
+            String kw = String.valueOf(parsed.getOrDefault("keyword", ""));
+            if (!kw.isBlank()) keywords.add(kw);
+            list = toCards(questionClient.searchInternal(kw, null, null, null, 10));
+            list = PhotoSearchRules.rerank(list, keywords);
+            out.put("recognized", false);
+            out.put("reason", (visionReason == null || visionReason.isBlank() ? "未能识别图片中的题目" : visionReason)
+                    + "，已按文字补充检索");
+            out.put("hintUsed", true);
+        }
+        out.put("keywords", keywords);
+        out.put("count", list.size());
+        out.put("list", list);
+
+        // 治理日志（scene=PHOTO_SEARCH；promptChars 记 base64 体积便于视觉调用量核算）
+        try {
+            AiLog l = new AiLog();
+            l.setUserId(userId); l.setScene("PHOTO_SEARCH"); l.setProvider(provider.name());
+            l.setModel(provider.name()); l.setPromptChars(imageBase64.length());
+            l.setRespChars(visionJson == null ? 0 : visionJson.length());
+            l.setCostMs((int) cost); l.setDegraded(degraded ? 1 : 0); l.setCreatedAt(LocalDateTime.now());
+            aiLogMapper.insert(l);
+        } catch (Exception ignored) { }
         return out;
     }
 

@@ -37,4 +37,18 @@ class MockAiProviderTest {
         assertTrue(root.path("answers").isArray());
         assertFalse(root.path("reason").asText().isBlank());
     }
+
+    @Test
+    void 视觉输入_拍照搜题场景返回确定性题干() throws Exception {
+        // 提示词含"题干"标记即拍照搜题场景（docs/23 §3A）：返回确定性伪题干驱动全链路离线演示
+        String resp = provider.chatVision("你是题目图片识别器。从照片中提取题目题干文本。", "user", "aGk=", "image/png");
+        var root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(resp);
+        assertTrue(root.path("recognized").asBoolean(false));
+        assertFalse(root.path("stem").asText().isBlank());
+        assertTrue(root.path("stem").asText().contains("函数"), "伪题干须含可检索词，MOCK 下检索链路可命中");
+        // 扫描转录场景合同不受影响：不含"题干"标记仍走未识别
+        String scan = provider.chatVision("你是答题卡扫描件识别器。", "user", "aGk=", "image/jpeg");
+        assertFalse(new com.fasterxml.jackson.databind.ObjectMapper()
+                .readTree(scan).path("recognized").asBoolean(true));
+    }
 }

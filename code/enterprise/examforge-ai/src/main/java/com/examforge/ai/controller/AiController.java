@@ -41,6 +41,15 @@ public class AiController {
         return Result.ok(aiService.aiSearch(Long.valueOf(uid), query));
     }
 
+    /** C7 拍照搜题（docs/23 §3A）：图片 base64 → 视觉提取题干 → 检索匹配；hint 为识别失败时的文字补充（可选） */
+    @PostMapping("/photo-search")
+    public Result<Map<String, Object>> photoSearch(@RequestHeader("X-User-Id") String uid,
+                                                   @RequestBody Map<String, String> body) {
+        String image = body.get("imageBase64");
+        if (image == null || image.isBlank()) throw new BizException(Result.BAD_REQUEST, "imageBase64 必填");
+        return Result.ok(aiService.photoSearch(Long.valueOf(uid), image, body.get("mime"), body.get("hint")));
+    }
+
     /** SSE 流式讲题：逐步推送讲解步骤（text/event-stream） */
     @GetMapping(value = "/explain/stream", produces = "text/event-stream")
     public org.springframework.web.servlet.mvc.method.annotation.SseEmitter explainStream(
