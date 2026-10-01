@@ -38,14 +38,34 @@ public class AuthController {
     @PostMapping("/admin-login")
     public Result<Map<String, Object>> adminLogin(jakarta.servlet.http.HttpServletRequest req,
                                                   @RequestBody Map<String, String> body) {
-        Result<Map<String, Object>> r = authService.login(body.get("mobile"), body.get("password"), clientIp(req));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> profile = (Map<String, Object>) r.getData().get("profile");
-        String role = String.valueOf(profile.get("role"));
-        if (!"SUPER_ADMIN".equals(role) && !"OP".equals(role) && !"EDITOR".equals(role)) {
-            throw new BizException(Result.UNAUTHORIZED, "该账号无管理端权限");
-        }
-        return r;
+        return authService.adminLogin(body.get("mobile"), body.get("password"), clientIp(req), body.get("totp"));
+    }
+
+    // ---------- 管理端 TOTP 双因子（docs/20 §6 等保二级；需登录态） ----------
+
+    /** 绑定第一步：生成密钥与 otpauth URI（Authenticator 手动录入） */
+    @PostMapping("/totp/setup")
+    public Result<Map<String, Object>> totpSetup(@RequestHeader("X-User-Id") String uid) {
+        return Result.ok(authService.totpSetup(Long.valueOf(uid)));
+    }
+
+    /** 绑定第二步：动态码验证通过后启用 */
+    @PostMapping("/totp/enable")
+    public Result<Map<String, Object>> totpEnable(@RequestHeader("X-User-Id") String uid,
+                                                  @RequestBody Map<String, String> body) {
+        return Result.ok(authService.totpEnable(Long.valueOf(uid), body.get("code")));
+    }
+
+    /** 双因子状态（管理端安全设置页用；secret 不下发） */
+    @GetMapping("/totp/state")
+    public Result<Map<String, Object>> totpState(@RequestHeader("X-User-Id") String uid) {
+        return Result.ok(authService.totpState(Long.valueOf(uid)));
+    }
+
+    /** 解绑（重置密钥） */
+    @PostMapping("/totp/disable")
+    public Result<Map<String, Object>> totpDisable(@RequestHeader("X-User-Id") String uid) {
+        return Result.ok(authService.totpDisable(Long.valueOf(uid)));
     }
 
     /** 当前用户（网关透传 X-User-Id） */

@@ -124,6 +124,42 @@ public class AiService {
         return run(userId, "EXPLAIN", system, user);
     }
 
+    /**
+     * TJ-42 AI 教学设计草稿（docs/26 §8"AI生成教学设计"，docs/22 §2.17）：
+     * 输入学段/学科/知识点（可附例题题干）→ 结构化教案草稿（教学目标/重难点/教学过程/板书设计）。
+     * RAG 挂课标库为 P2（当前提示词内置课标要点口径）；aigc 草稿仅供教师参考，不直接进任何发布流。
+     */
+    public Map<String, Object> teachingDesign(Long userId, String gradeLevel, String subject, String kp, String stem) {
+        checkQuota(userId);
+        String system = "你是一名资深教研员。按课标口径生成一份教学设计草稿，严格输出 JSON：" +
+                "{gradeLevel, subject, kp, objectives:[3条], keyPoints:[], difficulties:[], " +
+                "process:[{step,title,detail} 四环节：课前预习/课堂例题/随堂检测/课后作业分层], " +
+                "board:[板书行], aigc:true}，不要输出 JSON 以外内容。";
+        String user = "学段：" + nvl(gradeLevel) + "\n学科：" + nvl(subject) + "\n知识点：" + nvl(kp)
+                + (stem == null || stem.isBlank() ? "" : "\n例题题干：" + stem)
+                + "\n请生成教学设计。";
+        Map<String, Object> out = new java.util.HashMap<>(run(userId, "TEACHING_DESIGN", system, user));
+        try {
+            var root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(String.valueOf(out.get("raw")));
+            out.put("gradeLevel", root.path("gradeLevel").asText(nvl(gradeLevel)));
+            out.put("subject", root.path("subject").asText(nvl(subject)));
+            out.put("kp", root.path("kp").asText(nvl(kp)));
+            out.put("objectives", om().readTree(root.path("objectives").toString()));
+            out.put("keyPoints", om().readTree(root.path("keyPoints").toString()));
+            out.put("difficulties", om().readTree(root.path("difficulties").toString()));
+            out.put("process", om().readTree(root.path("process").toString()));
+            out.put("board", om().readTree(root.path("board").toString()));
+            out.put("aigc", true);
+        } catch (Exception e) {
+            log.warn("教学设计解析失败（保留 raw）: {}", e.getMessage());
+        }
+        return out;
+    }
+
+    private com.fasterxml.jackson.databind.ObjectMapper om() {
+        return new com.fasterxml.jackson.databind.ObjectMapper();
+    }
+
     /** S-1/S-2 AI 搜：自然语言 → 结构化筛选 → 题库检索（docs/16 §3） */
     public Map<String, Object> aiSearch(Long userId, String query) {
         Map<String, Object> parsed;

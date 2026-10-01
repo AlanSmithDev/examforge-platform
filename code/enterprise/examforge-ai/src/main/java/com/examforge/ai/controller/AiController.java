@@ -50,6 +50,16 @@ public class AiController {
         return Result.ok(aiService.photoSearch(Long.valueOf(uid), image, body.get("mime"), body.get("hint")));
     }
 
+    /** TJ-42 AI 教学设计草稿（docs/26 §8"AI生成教学设计"；aigc 草稿仅供教师参考）：{gradeLevel?,subject?,kp,stem?} */
+    @PostMapping("/teaching-design")
+    public Result<Map<String, Object>> teachingDesign(@RequestHeader("X-User-Id") String uid,
+                                                      @RequestBody Map<String, String> body) {
+        String kp = body.get("kp");
+        if (kp == null || kp.isBlank()) throw new BizException(Result.BAD_REQUEST, "kp（知识点）必填");
+        return Result.ok(aiService.teachingDesign(Long.valueOf(uid),
+                body.get("gradeLevel"), body.get("subject"), kp, body.get("stem")));
+    }
+
     /** SSE 流式讲题：逐步推送讲解步骤（text/event-stream） */
     @GetMapping(value = "/explain/stream", produces = "text/event-stream")
     public org.springframework.web.servlet.mvc.method.annotation.SseEmitter explainStream(

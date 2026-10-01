@@ -29,6 +29,35 @@
           检索关键词：{{ photoInfo.keywords.join(' / ') }}
         </p>
       </div>
+      <el-divider style="margin:18px 0 12px" />
+      <h4 style="margin:0 0 10px">📝 AI 教学设计草稿（TJ-42）</h4>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <el-select v-model="tdGrade" size="small" style="width:110px">
+          <el-option v-for="g in ['小学','初中','高中']" :key="g" :label="g" :value="g" />
+        </el-select>
+        <el-input v-model="tdSubject" placeholder="学科" size="small" style="width:100px" />
+        <el-input v-model="tdKp" placeholder="知识点（必填），如：函数的单调性" size="small" style="flex:1;min-width:220px" />
+        <el-button size="small" type="primary" :loading="tdBusy" @click="genDesign">生成草稿</el-button>
+      </div>
+      <el-input v-model="tdStem" type="textarea" :rows="2" placeholder="例题题干（可选，围绕它设计教学环节）" style="margin-top:8px" />
+      <div v-if="td" style="margin-top:10px">
+        <el-alert type="success" :closable="false" :title="td.gradeLevel + ' · ' + td.subject + ' · ' + td.kp" />
+        <h5 style="margin:10px 0 4px">教学目标</h5>
+        <ul class="td-list"><li v-for="(o, i) in td.objectives" :key="'o'+i">{{ o }}</li></ul>
+        <h5 style="margin:10px 0 4px">重难点</h5>
+        <ul class="td-list">
+          <li v-for="(k, i) in td.keyPoints" :key="'k'+i">重点：{{ k }}</li>
+          <li v-for="(d, i) in td.difficulties" :key="'d'+i">难点：{{ d }}</li>
+        </ul>
+        <h5 style="margin:10px 0 4px">教学过程（四环节）</h5>
+        <el-table :data="td.process" size="small">
+          <el-table-column prop="title" label="环节" width="150" />
+          <el-table-column prop="detail" label="设计" min-width="280" />
+        </el-table>
+        <h5 style="margin:10px 0 4px">板书设计</h5>
+        <div v-for="(b, i) in td.board" :key="'b'+i" style="font-size:13px;line-height:1.8">{{ b }}</div>
+        <p class="meta" style="margin-top:8px">AIGC 草稿仅供教研参考，使用前请人工复核（消耗 1 次 AI 配额）</p>
+      </div>
       <p class="meta" style="margin-top:8px">图片仅用于识别，jpg/png/webp ≤ 8MB；每次拍照搜题消耗 1 次 AI 配额</p>
     </el-card>
 
@@ -100,10 +129,25 @@ function render(s) {
     try { return katex.renderToString(tex, { throwOnError: false }) } catch (_) { return _ }
   })
 }
+
+// ---------- AI 教学设计草稿（TJ-42，docs/26 §8）：学段/学科/知识点 → 结构化教案（MOCK 渠道确定性输出） ----------
+const tdGrade = ref('高中'), tdSubject = ref('数学'), tdKp = ref(''), tdStem = ref(''),
+      tdBusy = ref(false), td = ref(null)
+
+async function genDesign() {
+  if (!tdKp.value.trim()) { ElMessage.warning('请填写知识点'); return }
+  tdBusy.value = true
+  try {
+    td.value = await http.post('/ai/teaching-design', {
+      gradeLevel: tdGrade.value, subject: tdSubject.value, kp: tdKp.value.trim(), stem: tdStem.value || undefined
+    })
+  } catch (_) {} finally { tdBusy.value = false }
+}
 </script>
 
 <style scoped>
 .photo-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1px dashed var(--line,#dcdfe6);
   border-radius:6px;background:#fff;cursor:pointer;font-size:13px;color:var(--text-1,#303133)}
 .photo-btn:hover{border-color:var(--brand,#409eff);color:var(--brand,#409eff)}
+.td-list{margin:0;padding-left:18px;font-size:13px;line-height:1.9}
 </style>
