@@ -5,13 +5,17 @@ import com.examforge.api.feign.TradeClient;
 import com.examforge.common.security.JwtUtil;
 import com.examforge.common.web.GlobalExceptionHandler.BizException;
 import com.examforge.common.web.Result;
+import com.examforge.user.domain.LoginAttempt;
 import com.examforge.user.domain.User;
+import com.examforge.user.logic.LoginGuardRules;
+import com.examforge.user.mapper.LoginAttemptMapper;
 import com.examforge.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.SplittableRandom;
 
@@ -23,6 +27,7 @@ public class AuthService {
     private final UserMapper userMapper;
     private final JwtUtil jwtUtil;
     private final TradeClient tradeClient;
+    private final LoginAttemptMapper attemptMapper;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private final SplittableRandom random = new SplittableRandom();
 
@@ -76,13 +81,54 @@ public class AuthService {
         return null;   // 极小概率冲突，邀请码允许为空
     }
 
-    public Result<Map<String, Object>> login(String mobile, String password) {
-        User u = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getMobile, mobile));
-        if (u == null || !encoder.matches(password == null ? "" : password, u.getPasswordHash())) {
-            throw new BizException(Result.UNAUTHORIZED, "手机号或密码错误");
+    /**
+     * 登录（docs/20 §6 防爆破）：窗口内同源失败≥5 → 临时锁定 15min（锁定期内不验密码直接拒绝）；
+     * 每次尝试落 login_attempt 流水（等保审计留痕）。ip 取网关透传 X-Forwarded-For，缺省 "unknown"。
+     */
+    public Result<Map<String, Object>> login(String mobile, String password, String ip) {
+        LocalDateTime now = LocalDateTime.now();
+        // 防爆破锁定判定（按 mobile+ip 同源；fail-open：流水查询异常不阻断登录）
+        try {
+            var recent = attemptMapper.selectList(new LambdaQueryWrapper<LoginAttempt>()
+                    .eq(LoginAttempt::getMobile, mobile)
+                    .eq(LoginAttempt::getIp, ip == null || ip.isBlank() ? "unknown" : ip)
+                    .eq(LoginAttempt::getSuccess, 0)
+                    .gt(LoginAttempt::getCreatedAt, LoginGuardRules.windowStart(now))
+                    .orderByDesc(LoginAttempt::getCreatedAt)
+                    .last("LIMIT " + LoginGuardRules.FAIL_LIMIT));
+            LocalDateTime until = LoginGuardRules.lockedUntil(recent.size(),
+                    recent.isEmpty() ? null : recent.get(0).getCreatedAt(), now);
+            if (until != null) {
+                long remain = LoginGuardRules.lockRemainSeconds(until, now);
+                log.warn("登录锁定触发: mobile={} ip={} 剩余{}s", mobile, ip, remain);
+                throw new BizException(Result.TOO_MANY, "登录尝试过于频繁，账户已临时锁定，请 " + Math.max(remain / 60 + 1, 1) + " 分钟后再试");
+            }
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("登录防爆破判定不可用（fail-open）: {}", e.getMessage());
         }
+
+        User u = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getMobile, mobile));
+        boolean ok = u != null && encoder.matches(password == null ? "" : password, u.getPasswordHash());
+        record(mobile, ip, ok);   // 审计留痕（每次尝试）
+        if (!ok) throw new BizException(Result.UNAUTHORIZED, "手机号或密码错误");
         if (u.getStatus() == 0) throw new BizException(Result.FORBIDDEN, "账号已封禁");
         return Result.ok(tokenOf(u));
+    }
+
+    /** 尝试流水落库（fail-open：审计失败不阻断登录主流程） */
+    private void record(String mobile, String ip, boolean success) {
+        try {
+            LoginAttempt a = new LoginAttempt();
+            a.setMobile(mobile);
+            a.setIp(ip == null || ip.isBlank() ? "unknown" : ip);
+            a.setSuccess(success ? 1 : 0);
+            a.setCreatedAt(LocalDateTime.now());
+            attemptMapper.insert(a);
+        } catch (Exception e) {
+            log.warn("登录流水落库失败（fail-open）: {}", e.getMessage());
+        }
     }
 
     private Map<String, Object> tokenOf(User u) {

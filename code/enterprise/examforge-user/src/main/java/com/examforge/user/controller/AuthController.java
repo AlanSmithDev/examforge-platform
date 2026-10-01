@@ -21,14 +21,24 @@ public class AuthController {
         return authService.register(body.get("mobile"), body.get("password"), body.get("nickname"), body.get("role"), body.get("inviteCode"));
     }
 
+    /** 客户端 IP：网关 X-Forwarded-For 首段（直连时回退 X-Real-IP/unknown） */
+    private String clientIp(jakarta.servlet.http.HttpServletRequest req) {
+        String xff = req.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
+        String real = req.getHeader("X-Real-IP");
+        return real == null || real.isBlank() ? "unknown" : real.trim();
+    }
+
     @PostMapping("/login")
-    public Result<Map<String, Object>> login(@RequestBody Map<String, String> body) {
-        return authService.login(body.get("mobile"), body.get("password"));
+    public Result<Map<String, Object>> login(jakarta.servlet.http.HttpServletRequest req,
+                                             @RequestBody Map<String, String> body) {
+        return authService.login(body.get("mobile"), body.get("password"), clientIp(req));
     }
 
     @PostMapping("/admin-login")
-    public Result<Map<String, Object>> adminLogin(@RequestBody Map<String, String> body) {
-        Result<Map<String, Object>> r = authService.login(body.get("mobile"), body.get("password"));
+    public Result<Map<String, Object>> adminLogin(jakarta.servlet.http.HttpServletRequest req,
+                                                  @RequestBody Map<String, String> body) {
+        Result<Map<String, Object>> r = authService.login(body.get("mobile"), body.get("password"), clientIp(req));
         @SuppressWarnings("unchecked")
         Map<String, Object> profile = (Map<String, Object>) r.getData().get("profile");
         String role = String.valueOf(profile.get("role"));

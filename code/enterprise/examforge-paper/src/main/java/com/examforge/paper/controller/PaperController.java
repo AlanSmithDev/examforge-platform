@@ -23,15 +23,18 @@ public class PaperController {
     private final PaperMapper paperMapper;
     private final PaperQuestionMapper paperQuestionMapper;
     private final com.examforge.paper.service.PaperEditService editService;
+    private final com.examforge.paper.service.PaperTemplateService templateService;
 
     public PaperController(QuestionClient questionClient, PaperMapper paperMapper,
                            PaperQuestionMapper paperQuestionMapper,
-                           com.examforge.paper.service.PaperEditService editService) {
+                           com.examforge.paper.service.PaperEditService editService,
+                           com.examforge.paper.service.PaperTemplateService templateService) {
         // 组卷引擎的取题通道 = Feign 契约（跨服务调用题库服务）
         this.engine = new PaperGenerateEngine(questionClient::listByType);
         this.paperMapper = paperMapper;
         this.paperQuestionMapper = paperQuestionMapper;
         this.editService = editService;
+        this.templateService = templateService;
     }
 
     @PostMapping("/generate")
@@ -110,5 +113,33 @@ public class PaperController {
     @GetMapping("/{id}/scope")
     public Result<Map<String, Object>> scope(@RequestHeader("X-User-Id") String uid, @PathVariable Long id) {
         return Result.ok(editService.scope(Long.valueOf(uid), id));
+    }
+
+    // ================= 试卷模板（docs/25 TJ-80/TJ-22：存为模版 / 模板选题 / 删除） =================
+
+    /** 存为模板：从现有卷快照题目与分值，{name} */
+    @PostMapping("/{id}/save-template")
+    public Result<Map<String, Object>> saveTemplate(@RequestHeader("X-User-Id") String uid, @PathVariable Long id,
+                                                    @RequestBody Map<String, String> body) {
+        return Result.ok(templateService.saveFromPaper(Long.valueOf(uid), id, body.get("name")));
+    }
+
+    /** 我的模板列表 */
+    @GetMapping("/templates")
+    public Result<List<Map<String, Object>>> templates(@RequestHeader("X-User-Id") String uid) {
+        return Result.ok(templateService.mine(Long.valueOf(uid)));
+    }
+
+    /** 模板选题：快照复制生成新卷，{title?}（缺省=模板名·副本+日期） */
+    @PostMapping("/templates/{id}/apply")
+    public Result<Map<String, Object>> applyTemplate(@RequestHeader("X-User-Id") String uid, @PathVariable Long id,
+                                                     @RequestBody(required = false) Map<String, String> body) {
+        return Result.ok(templateService.apply(Long.valueOf(uid), id, body == null ? null : body.get("title")));
+    }
+
+    /** 删除模板（本人） */
+    @DeleteMapping("/templates/{id}")
+    public Result<Map<String, Object>> deleteTemplate(@RequestHeader("X-User-Id") String uid, @PathVariable Long id) {
+        return Result.ok(templateService.delete(Long.valueOf(uid), id));
     }
 }
