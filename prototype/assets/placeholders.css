@@ -1,0 +1,50 @@
+/* WP-5: 占位组件体系 —— 广告位 / Logo / 图片素材槽
+   规则：后台未配置素材时，槽位显示虚线占位框（槽位编码 + 建议尺寸）；
+   配置素材后由 JS 用真实内容替换，无需改页面代码。 */
+
+/* ---------- Logo 槽 ---------- */
+.slot-logo {
+  min-width: 120px; height: 40px; border: 1.5px dashed #b6c3d9; border-radius: 10px;
+  background: #f6f9ff; display: inline-flex; align-items: center; justify-content: center;
+  color: #6b7aa8; font-size: 12px; padding: 0 12px;
+}
+.slot-logo::before { content: "Logo 槽 · 后台可配"; }
+.slot-logo.has-img { border: none; background: none; }
+.slot-logo.has-img::before { content: none; }
+.slot-logo img { height: 36px; display: block; }
+
+/* ---------- 广告位槽 ---------- */
+.slot-ad {
+  border: 1.5px dashed #d6a76c; border-radius: 12px; background: #fffaf2;
+  color: #b07a2a; font-size: 12.5px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; text-align: center;
+  padding: 10px 14px; margin: 12px 0; position: relative; overflow: hidden;
+}
+.slot-ad::before { content: "广告位 " attr(data-slot); font-weight: 700; }
+.slot-ad::after { content: attr(data-size); font-size: 11px; opacity: .75; }
+.slot-ad.has-img { border: none; background: none; padding: 0; }
+.slot-ad.has-img::before, .slot-ad.has-img::after { content: none; }
+.slot-ad.has-img img { width: 100%; display: block; border-radius: 12px; }
+.slot-ad.has-img a { display: block; }
+
+/* 常用尺寸 */
+.slot-ad[data-slot="home_banner"] { height: 88px; }
+.slot-ad[data-slot="home_hero"] { height: 120px; }
+.slot-ad[data-slot="sidebar_teacher"], .slot-ad[data-slot="sidebar_student"] { height: 200px; }
+.slot-ad[data-slot="list_inline"] { height: 72px; }
+.slot-ad[data-slot="detail_footer"] { height: 80px; }
+.slot-ad[data-slot="login_promo"] { height: 64px; }
+
+/* ---------- 图片素材槽 ---------- */
+.slot-img {
+  border: 1.5px dashed #9fb7d9; border-radius: 12px; background: #f4f8ff;
+  color: #4c6b9e; font-size: 12px; display: inline-flex; align-items: center;
+  justify-content: center; padding: 8px 12px;
+}
+.slot-img::before { content: "图片槽 " attr(data-slot); }
+.slot-img.has-img { border: none; background: none; padding: 0; }
+.slot-img.has-img::before { content: none; }
+.slot-img img { max-width: 100%; display: block; }
+
+/* ---------- 调试模式：?slots=1 显示所有槽位编码 ---------- */
+body.debug-slots [data-slot] { outline: 2px solid #f59e0b; outline-offset: 2px; }
