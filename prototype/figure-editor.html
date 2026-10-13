@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数学图形工作台 - 智卷云</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <a class="logo" href="index.html"><span class="mark">智</span><span><em>智卷云</em></span></a>
+  <div class="links">
+    <a href="index.html">首页</a>
+    <a href="xuanti.html">章节选题</a>
+    <a href="zsd.html">知识点选题</a>
+    <a href="shijuan.html">试卷选题</a>
+    <a href="zhineng.html">智能组卷</a>
+    <a href="shanghaoke.html">上好课</a>
+    <a href="gaokao.html">高考·名校卷</a>
+    <a href="zhuanji.html">精品专辑</a>
+    <a href="mine.html">个人题库</a>
+    <a href="vip.html">会员</a>
+  </div>
+  <div class="spacer"></div>
+  <a class="btn btn-ghost" href="#">📐 我的图形库</a>
+  <a class="btn btn-primary" onclick="toast('图形已保存：DSL 校验通过，已生成 SVG 与 300dpi PNG 并挂接到题目')">保存图形</a>
+</nav>
+
+<div class="breadcrumb">数学图形工作台 / <b>画板模式</b> —— 画什么存什么（Figure DSL），一次定义，网页/打印/Word 三端一致</div>
+
+<div class="editor">
+  <div class="editor-shell">
+    <div class="ed-tabs">
+      <div class="tab on">✏️ 几何画板</div>
+      <div class="tab">📈 函数绘图</div>
+      <div class="tab">🧊 模板库（300+）</div>
+      <div class="tab">🖼️ 图片题处理</div>
+      <span style="flex:1"></span>
+      <div style="padding:8px 14px;font-size:12.5px;color:var(--text-3)">DSL v1 · Schema 校验通过</div>
+    </div>
+
+    <div class="ed-body">
+      <!-- 工具栏 -->
+      <div class="ed-tools">
+        <div class="tool on" title="选择/移动">⬚</div>
+        <div class="tool" title="点">•</div>
+        <div class="tool" title="线段">／</div>
+        <div class="tool" title="圆">◯</div>
+        <div class="tool" title="多边形">⬠</div>
+        <div class="tool" title="中点/垂足/交点">⊥</div>
+        <div class="tool" title="标注（支持LaTeX）">Aa</div>
+        <div class="tool" title="角度/长度标记">∠</div>
+        <div class="tool" title="虚线辅助线">┈</div>
+        <div class="tool" title="函数图像">∫</div>
+      </div>
+
+      <!-- 画布 -->
+      <div class="ed-canvas">
+        <div class="stage">
+          <svg id="stage" width="560" height="440" viewBox="0 0 560 440">
+            <defs>
+              <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">
+                <path d="M28 0H0V28" fill="none" stroke="#e8ecf5" stroke-width="1"/>
+              </pattern>
+            </defs>
+            <rect width="560" height="440" fill="url(#grid)"/>
+            <g id="cube" transform="translate(155,110)">
+              <g stroke="#1f2937" stroke-width="2.4" fill="none" stroke-linecap="round">
+                <line x1="40" y1="210" x2="180" y2="210"/><line x1="180" y1="210" x2="250" y2="170"/>
+                <line x1="40" y1="210" x2="40" y2="70"/><line x1="180" y1="210" x2="180" y2="70"/>
+                <line x1="250" y1="170" x2="250" y2="30"/>
+                <line x1="40" y1="70" x2="180" y2="70"/><line x1="180" y1="70" x2="250" y2="30"/>
+                <line x1="250" y1="30" x2="110" y2="30"/><line x1="110" y1="30" x2="40" y2="70"/>
+              </g>
+              <g stroke="#9ca3af" stroke-width="1.8" fill="none" stroke-dasharray="6 4">
+                <line x1="250" y1="170" x2="110" y2="170"/><line x1="110" y1="170" x2="40" y2="210"/><line x1="110" y1="170" x2="110" y2="30"/>
+              </g>
+              <g stroke="#2563eb" stroke-width="2.4"><line x1="180" y1="210" x2="250" y2="130"/></g>
+              <g stroke="#dc2626" stroke-width="2.4"><line x1="40" y1="210" x2="250" y2="170"/></g>
+              <circle cx="250" cy="130" r="4.5" fill="#1f2937"/>
+              <g font-size="17" fill="#1f2937" font-style="italic" font-family="Georgia, serif">
+                <text x="22" y="230">A</text><text x="184" y="230">B</text><text x="258" y="188">C</text><text x="100" y="192">D</text>
+                <text x="20" y="64">A₁</text><text x="188" y="62">B₁</text><text x="258" y="22">C₁</text><text x="92" y="20">D₁</text>
+                <text x="262" y="138" fill="#111">E</text>
+              </g>
+              <text x="30" y="255" font-size="13" fill="#6b7280">棱长 a = <tspan id="edgeLabel" fill="#2563eb" font-weight="bold">2</tspan>（拖动右侧滑块实时改图，DSL 同步更新）</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- 属性面板 -->
+      <div class="ed-props">
+        <h4>模板参数</h4>
+        <div class="prop-row"><span>模板</span><b>正方体 + 中点连线</b></div>
+        <div class="prop-row"><span>棱长 a</span><input type="range" min="1" max="4" step="0.5" value="2" id="edge" oninput="setEdge(this.value)"></div>
+        <div class="prop-row"><span>标注点 E</span><span>CC₁ 中点</span></div>
+        <div class="prop-row"><span>辅助线 BE / AC</span><span class="tag on" style="font-size:12px">已标色</span></div>
+        <h4>样式</h4>
+        <div class="prop-row"><span>线宽</span><span class="seg"><span>细</span><span class="on">中</span><span>粗</span></span></div>
+        <div class="prop-row"><span>线条色</span><span class="swatches">
+          <span class="sw on" style="background:#1f2937"></span><span class="sw" style="background:#2563eb"></span>
+          <span class="sw" style="background:#dc2626"></span><span class="sw" style="background:#059669"></span></span></div>
+        <div class="prop-row"><span>网格</span><span class="seg"><span class="on">显示</span><span>隐藏</span></span></div>
+        <h4>输出预览</h4>
+        <div class="prop-row"><span>网页</span><span>SVG 矢量 ✓</span></div>
+        <div class="prop-row"><span>打印</span><span>300dpi PNG ✓</span></div>
+        <div class="prop-row"><span>Word</span><span>高清位图 ✓</span></div>
+        <div class="prop-row"><span>移动端</span><span>SVG 缩放 ✓</span></div>
+        <h4>智能辅助</h4>
+        <div class="prop-row"><span>AI 识图转 DSL</span><button class="btn btn-ghost btn-sm" onclick="toast('上传扫描图 → 多模态模型识别 → 生成 DSL 草稿 → 画板内人工校对')">试一试</button></div>
+        <div class="prop-row"><span>遮挡边自动虚化</span><span class="tag on" style="font-size:12px">已开启</span></div>
+      </div>
+
+      <!-- DSL 代码 -->
+      <div class="dsl-panel" id="dsl"></div>
+    </div>
+  </div>
+
+  <div class="grid grid-3" style="margin-top:20px">
+    <div class="card"><div class="icon-chip">🧊</div><h3>模板库 300+</h3><p>正方体/三棱锥/圆柱圆锥/外接球内切球/截面、统计图表全套、单位圆、可行域、概率树——改参数 10 秒出图。</p></div>
+    <div class="card"><div class="icon-chip">📈</div><h3>函数绘图器</h3><p>输入表达式即绘，支持分段函数与参数滑块（拖动 a/k 看图像变化），自动生成带刻度坐标系的出版级图形。</p></div>
+    <div class="card"><div class="icon-chip">🖼️</div><h3>图片题数字化</h3><p>上传扫描卷：裁白边/增强 → OCR 公式转 LaTeX（Mathpix/开源 pix2tex）→ 函数图反解为 DSL → 双存储原图+清洗版。</p></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<footer class="footer" style="margin-top:24px"><p><b>智卷云</b> 原型 · 数学图形工作台（Figure DSL：结构化存储 → SVG 矢量 / 300dpi PNG / Word 三端渲染）</p></footer>
+
+<script>
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = '✅ ' + msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 3000);
+}
+function renderDsl(a) {
+  document.getElementById('dsl').innerHTML =
+`<span class="k">{</span> <span class="s">"schemaVersion"</span>: <span class="n">1</span>, <span class="s">"type"</span>: <span class="s">"solid_cube"</span>,
+  <span class="s">"canvas"</span>: { <span class="s">"width"</span>: <span class="n">560</span>, <span class="s">"height"</span>: <span class="n">440</span>, <span class="s">"projection"</span>: <span class="s">"oblique"</span> },
+  <span class="s">"elements"</span>: [
+    { <span class="s">"t"</span>: <span class="s">"cube"</span>, <span class="s">"edge"</span>: <span class="n">${a}</span>, <span class="s">"origin"</span>: <span class="s">"A"</span>,
+      <span class="s">"hiddenEdges"</span>: <span class="s">"auto-dash"</span> },            <span class="k">// 遮挡边自动虚线</span>
+    { <span class="s">"t"</span>: <span class="s">"point"</span>, <span class="s">"id"</span>: <span class="s">"E"</span>, <span class="s">"of"</span>: <span class="s">"midpoint(CC1)"</span> },
+    { <span class="s">"t"</span>: <span class="s">"segment"</span>, <span class="s">"from"</span>: <span class="s">"B"</span>, <span class="s">"to"</span>: <span class="s">"E"</span>, <span class="s">"style"</span>: { <span class="s">"stroke"</span>: <span class="s">"#2563eb"</span> } },
+    { <span class="s">"t"</span>: <span class="s">"segment"</span>, <span class="s">"from"</span>: <span class="s">"A"</span>, <span class="s">"to"</span>: <span class="s">"C"</span>, <span class="s">"style"</span>: { <span class="s">"stroke"</span>: <span class="s">"#dc2626"</span> } },
+    { <span class="s">"t"</span>: <span class="s">"label"</span>, <span class="s">"attach"</span>: <span class="s">"edge AB"</span>, <span class="s">"text"</span>: <span class="s">"a=</span><span class="n">${a}</span><span class="s">"</span> }
+  ] <span class="k">}</span>`;
+}
+function setEdge(v) {
+  const scale = v / 2;
+  document.getElementById('cube').setAttribute('transform', `translate(155, ${110 + 110 * (1 - scale)}) scale(${scale})`);
+  document.getElementById('edgeLabel').textContent = v;
+  renderDsl(v);
+}
+renderDsl(2);
+</script>
+</body>
+</html>
